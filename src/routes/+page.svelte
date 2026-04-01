@@ -2,21 +2,58 @@
   import { onMount } from 'svelte';
   import { convertFileSrc } from '@tauri-apps/api/core';
   import { getCurrentWindow } from '@tauri-apps/api/window';
+  import { readDir } from '@tauri-apps/plugin-fs';
 
   let filePath = $state('');
   let fileSrc = $state('');
   let fileName = $state('no file open');
   let isVideo = $state(false);
+  let fileList: string[] = $state([]);
+  let currentIndex = $state(0);
 
   const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'];
   const videoExts = ['mp4', 'webm', 'mkv', 'avi', 'mov', 'wmv'];
+  const allExts = [...imageExts, ...videoExts];
 
-  function loadFile(path: string) {
+  function displayFile(path: string) {
     filePath = path;
     fileName = path.split('\\').pop() || path.split('/').pop() || path;
     const ext = path.split('.').pop()?.toLowerCase() || '';
     isVideo = videoExts.includes(ext);
     fileSrc = convertFileSrc(path);
+  }
+
+  async function loadFile(path: string) {
+    displayFile(path);
+    const sep = path.includes('\\') ? '\\' : '/';
+    const folder = path.substring(0, path.lastIndexOf(sep));
+    try {
+      const entries = await readDir(folder);
+      fileList = entries
+        .filter(e => {
+          const ext = e.name?.split('.').pop()?.toLowerCase() || '';
+          return allExts.includes(ext);
+        })
+        .map(e => `${folder}${sep}${e.name}`)
+        .sort();
+      currentIndex = fileList.indexOf(path);
+    } catch (err) {
+      console.error('could not read folder:', err);
+    }
+  }
+
+  function navigate(direction: number) {
+    if (fileList.length === 0) return;
+    currentIndex = (currentIndex + direction + fileList.length) % fileList.length;
+    displayFile(fileList[currentIndex]);
+  }
+
+function handleKeydown(e: KeyboardEvent) {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowLeft' || e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+      e.preventDefault();
+    }
+    if (e.key === 'ArrowRight') navigate(1);
+    if (e.key === 'ArrowLeft') navigate(-1);
   }
 
   onMount(() => {
@@ -25,14 +62,14 @@
 
     const appWindow = getCurrentWindow();
     appWindow.onDragDropEvent((event) => {
-      console.log('drag drop event:', event);
       if (event.payload.type === 'drop') {
         const paths = event.payload.paths;
-        if (paths && paths.length > 0) {
-          loadFile(paths[0]);
-        }
+        if (paths && paths.length > 0) loadFile(paths[0]);
       }
     });
+
+    window.addEventListener('keydown', handleKeydown);
+    return () => window.removeEventListener('keydown', handleKeydown);
   });
 </script>
 
