@@ -1,19 +1,61 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
+  import { convertFileSrc } from '@tauri-apps/api/core';
+  import { getCurrentWindow } from '@tauri-apps/api/window';
+
+  let filePath = $state('');
+  let fileSrc = $state('');
+  let fileName = $state('no file open');
+  let isVideo = $state(false);
+
+  const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'];
+  const videoExts = ['mp4', 'webm', 'mkv', 'avi', 'mov', 'wmv'];
+
+  function loadFile(path: string) {
+    filePath = path;
+    fileName = path.split('\\').pop() || path.split('/').pop() || path;
+    const ext = path.split('.').pop()?.toLowerCase() || '';
+    isVideo = videoExts.includes(ext);
+    fileSrc = convertFileSrc(path);
+  }
+
+  onMount(() => {
+    const initial = (window as any).__INITIAL_FILE__;
+    if (initial) loadFile(initial);
+
+    const appWindow = getCurrentWindow();
+    appWindow.onDragDropEvent((event) => {
+      console.log('drag drop event:', event);
+      if (event.payload.type === 'drop') {
+        const paths = event.payload.paths;
+        if (paths && paths.length > 0) {
+          loadFile(paths[0]);
+        }
+      }
+    });
+  });
 </script>
 
-<main>
+<main ondrop={handleDrop} ondragover={handleDragOver} ondragenter={handleDragEnter}>
   <div class="topbar">
     <span class="app-name">vyu</span>
     <span class="divider">/</span>
-    <span class="filename">no file open</span>
+    <span class="filename">{fileName}</span>
   </div>
 
   <div class="viewer">
+    {#if fileSrc && !isVideo}
+      <img src={fileSrc} alt={fileName} />
+    {:else if fileSrc && isVideo}
+      <video src={fileSrc} controls autoplay></video>
+    {:else}
+      <span class="empty">drop a file or open one to get started</span>
+    {/if}
   </div>
 
   <div class="bottombar">
     <span class="file-count">—</span>
-    <span class="file-info">open a file to get started</span>
+    <span class="file-info">{fileName === 'no file open' ? 'no file open' : fileName}</span>
     <span class="zoom">100%</span>
   </div>
 </main>
@@ -65,6 +107,24 @@
     align-items: center;
     justify-content: center;
     background: #0a0a0a;
+    overflow: hidden;
+  }
+
+  .viewer img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+  }
+
+  .viewer video {
+    max-width: 100%;
+    max-height: 100%;
+  }
+
+  .empty {
+    font-size: 13px;
+    color: #333333;
+    font-family: Inter, sans-serif;
   }
 
   .bottombar {
