@@ -90,12 +90,19 @@
     displayFile(fileList[currentIndex]);
   }
 
-  function handleKeydown(e: KeyboardEvent) {
-    if (['ArrowRight', 'ArrowLeft', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
+ function handleKeydown(e: KeyboardEvent) {
+    if (['ArrowRight', 'ArrowLeft', 'ArrowUp', 'ArrowDown', ' '].includes(e.key)) {
       e.preventDefault();
     }
-    if (e.key === 'ArrowRight') navigate(1);
-    if (e.key === 'ArrowLeft') navigate(-1);
+
+    if (isVideo && videoEl) {
+      if (e.key === ' ') togglePlay();
+      if (e.key === 'ArrowRight') videoEl.currentTime = Math.min(videoEl.currentTime + 5, videoEl.duration);
+      if (e.key === 'ArrowLeft') videoEl.currentTime = Math.max(videoEl.currentTime - 5, 0);
+    } else {
+      if (e.key === 'ArrowRight') navigate(1);
+      if (e.key === 'ArrowLeft') navigate(-1);
+    }
   }
 
   async function openFileDialog() {
