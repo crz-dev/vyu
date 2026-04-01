@@ -3,6 +3,7 @@
   import { convertFileSrc } from '@tauri-apps/api/core';
   import { getCurrentWindow } from '@tauri-apps/api/window';
   import { readDir } from '@tauri-apps/plugin-fs';
+  import { open } from '@tauri-apps/plugin-dialog';
 
   let filePath = $state('');
   let fileSrc = $state('');
@@ -11,9 +12,50 @@
   let fileList: string[] = $state([]);
   let currentIndex = $state(0);
 
+  let videoEl = $state<HTMLVideoElement | null>(null);
+  let playing = $state(false);
+  let muted = $state(false);
+  let progress = $state(0);
+  let currentTime = $state('0:00');
+  let duration = $state('0:00');
+  let showControls = $state(false);
+
   const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'];
   const videoExts = ['mp4', 'webm', 'mkv', 'avi', 'mov', 'wmv'];
   const allExts = [...imageExts, ...videoExts];
+
+  function formatTime(seconds: number): string {
+    const m = Math.floor(seconds / 60);
+    const s = Math.floor(seconds % 60);
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  }
+
+  function updateProgress() {
+    if (!videoEl) return;
+    progress = (videoEl.currentTime / videoEl.duration) * 100;
+    currentTime = formatTime(videoEl.currentTime);
+    duration = formatTime(videoEl.duration);
+    playing = !videoEl.paused;
+  }
+
+  function togglePlay() {
+    if (!videoEl) return;
+    videoEl.paused ? videoEl.play() : videoEl.pause();
+    playing = !videoEl.paused;
+  }
+
+  function toggleMute() {
+    if (!videoEl) return;
+    videoEl.muted = !videoEl.muted;
+    muted = videoEl.muted;
+  }
+
+  function seekVideo(e: MouseEvent) {
+    if (!videoEl) return;
+    const bar = e.currentTarget as HTMLElement;
+    const ratio = e.offsetX / bar.offsetWidth;
+    videoEl.currentTime = ratio * videoEl.duration;
+  }
 
   function displayFile(path: string) {
     filePath = path;
@@ -48,12 +90,23 @@
     displayFile(fileList[currentIndex]);
   }
 
-function handleKeydown(e: KeyboardEvent) {
-    if (e.key === 'ArrowRight' || e.key === 'ArrowLeft' || e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+  function handleKeydown(e: KeyboardEvent) {
+    if (['ArrowRight', 'ArrowLeft', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
       e.preventDefault();
     }
     if (e.key === 'ArrowRight') navigate(1);
     if (e.key === 'ArrowLeft') navigate(-1);
+  }
+
+  async function openFileDialog() {
+    const selected = await open({
+      multiple: false,
+      filters: [{
+        name: 'Media',
+        extensions: [...imageExts, ...videoExts]
+      }]
+    });
+    if (selected) loadFile(selected as string);
   }
 
   onMount(() => {
@@ -73,7 +126,7 @@ function handleKeydown(e: KeyboardEvent) {
   });
 </script>
 
-<main ondrop={handleDrop} ondragover={handleDragOver} ondragenter={handleDragEnter}>
+<main ondrop={(e) => e.preventDefault()} ondragover={(e) => e.preventDefault()}>
   <div class="topbar">
     <span class="app-name">vyu</span>
     <span class="divider">/</span>
@@ -84,15 +137,40 @@ function handleKeydown(e: KeyboardEvent) {
     {#if fileSrc && !isVideo}
       <img src={fileSrc} alt={fileName} />
     {:else if fileSrc && isVideo}
-      <video src={fileSrc} controls autoplay></video>
+      <div class="video-wrapper"
+        role="presentation"
+        onmouseenter={() => showControls = true}
+        onmouseleave={() => showControls = false}>
+        <video
+          bind:this={videoEl}
+          src={fileSrc}
+          autoplay
+          ontimeupdate={updateProgress}
+        >
+          <track kind ="captions" />
+        </video>
+        <div class="video-controls">
+          <button class="progress-bar" onclick={seekVideo} aria-label="seek video">
+            <div class="progress-fill" style="width: {progress}%"></div>
+          </button>
+          <div class="controls-row">
+            <button class="ctrl-btn" onclick={togglePlay}>{playing ? '⏸' : '▶'}</button>
+            <button class="ctrl-btn" onclick={toggleMute}>{muted ? '🔇' : '🔊'}</button>
+            <span class="time-display">{currentTime} / {duration}</span>
+          </div>
+        </div>
+      </div>
     {:else}
-      <span class="empty">drop a file or open one to get started</span>
+      <button class="empty" onclick={openFileDialog}>
+        <span class="empty-icon">+</span>
+        <span class="empty-text">open a file</span>
+      </button>
     {/if}
   </div>
 
   <div class="bottombar">
-    <span class="file-count">—</span>
-    <span class="file-info">{fileName === 'no file open' ? 'no file open' : fileName}</span>
+    <span class="file-count">{fileList.length > 0 ? `${currentIndex + 1} / ${fileList.length}` : '—'}</span>
+    <span class="file-info">{fileName}</span>
     <span class="zoom">100%</span>
   </div>
 </main>
@@ -145,6 +223,7 @@ function handleKeydown(e: KeyboardEvent) {
     justify-content: center;
     background: #0a0a0a;
     overflow: hidden;
+    position: relative;
   }
 
   .viewer img {
@@ -153,12 +232,29 @@ function handleKeydown(e: KeyboardEvent) {
     object-fit: contain;
   }
 
-  .viewer video {
-    max-width: 100%;
-    max-height: 100%;
+  .empty {
+    background: none;
+    border: 1px dashed #222222;
+    border-radius: 8px;
+    padding: 32px 48px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    transition: border-color 0.2s;
   }
 
-  .empty {
+  .empty:hover {
+    border-color: #444444;
+  }
+
+  .empty-icon {
+    font-size: 24px;
+    color: #333333;
+  }
+
+  .empty-text {
     font-size: 13px;
     color: #333333;
     font-family: Inter, sans-serif;
@@ -179,5 +275,82 @@ function handleKeydown(e: KeyboardEvent) {
     font-size: 11px;
     color: #444444;
     font-family: Inter, sans-serif;
+  }
+
+  .video-wrapper {
+    position: relative;
+    max-width: 100%;
+    max-height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .video-wrapper video {
+    max-width: 100%;
+    max-height: 100%;
+  }
+
+  .video-controls {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 8px 12px;
+    background: linear-gradient(transparent, rgba(0,0,0,0.8));
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  .video-wrapper:hover .video-controls {
+    opacity: 1;
+  }
+
+  .progress-bar {
+    width: 100%;
+    height: 3px;
+    background: #333333;
+    border-radius: 2px;
+    cursor: pointer;
+    position: relative;
+    border: none;
+    padding: 0;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: #ffffff;
+    border-radius: 2px;
+    pointer-events: none;
+  }
+
+  .controls-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .ctrl-btn {
+    background: none;
+    border: none;
+    color: #cccccc;
+    cursor: pointer;
+    font-size: 13px;
+    padding: 2px 4px;
+    font-family: Inter, sans-serif;
+  }
+
+  .ctrl-btn:hover {
+    color: #ffffff;
+  }
+
+  .time-display {
+    font-size: 11px;
+    color: #888888;
+    font-family: Inter, sans-serif;
+    margin-left: auto;
   }
 </style>

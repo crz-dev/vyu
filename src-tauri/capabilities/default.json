@@ -13,6 +13,8 @@
     {
       "identifier": "fs:scope",
       "allow": [{ "path": "**" }]
-    }
+    },
+    "dialog:default",
+    "dialog:allow-open"
   ]
 }
