@@ -34,6 +34,7 @@
 
   // helper functions
   function formatTime(seconds: number): string {
+    if (!seconds || isNaN(seconds)) return '0:00';
     const m = Math.floor(seconds / 60);
     const s = Math.floor(seconds % 60);
     return `${m}:${s.toString().padStart(2, '0')}`;
@@ -311,6 +312,14 @@
           <button class="fs-wc-btn" onclick={maximizeWindow} aria-label="maximize">▢</button>
           <button class="fs-wc-btn close" onclick={closeWindow} aria-label="close">✕</button>
         </div>
+      </div>
+
+      <div class="fs-nav-left">
+        <button class="fs-nav-btn" onclick={() => navigate(-1)} aria-label="previous file">‹</button>
+      </div>
+
+      <div class="fs-nav-right">
+        <button class="fs-nav-btn" onclick={() => navigate(1)} aria-label="next file">›</button>
       </div>
 
       {#if isVideo && videoEl}
@@ -887,4 +896,43 @@
     align-items: center;
     gap: 8px;
   }
+
+  .fs-nav-left, .fs-nav-right {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .fs-nav-left {
+    left: 16px;
+  }
+
+  .fs-nav-right {
+    right: 16px;
+  }
+
+  .fs-nav-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: rgba(0,0,0,0.5);
+    border: 0.5px solid rgba(255,255,255,0.1);
+    color: #666666;
+    font-size: 24px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.2s, background 0.2s;
+    line-height: 1;
+  }
+
+  .fs-nav-btn:hover {
+    color: #cccccc;
+    background: rgba(0,0,0,0.7);
+  }
+
 </style>
