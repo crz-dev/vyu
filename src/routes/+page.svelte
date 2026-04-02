@@ -22,6 +22,11 @@
   let duration = $state('0:00');
   let showControls = $state(false);
 
+  // volume state
+  let volume = $state(1);
+  let volumeHovered = $state(false);
+  const VOLUME_SEGMENTS = 8;
+
   // ui state
   let hoverZone = $state('none');
   let isFullscreen = $state(false);
@@ -38,7 +43,7 @@
     const m = Math.floor(seconds / 60);
     const s = Math.floor(seconds % 60);
     return `${m}:${s.toString().padStart(2, '0')}`;
-  }
+  } 
 
   // video functions
   function updateProgress() {
@@ -57,8 +62,66 @@
 
   function toggleMute() {
     if (!videoEl) return;
-    videoEl.muted = !videoEl.muted;
-    muted = videoEl.muted;
+    muted = !muted;
+    videoEl.muted = muted;
+  }
+
+  function setVolume(val: number) {
+    volume = Math.max(0, Math.min(1, val));
+    if (videoEl) {
+      videoEl.volume = volume;
+      muted = volume === 0;
+      videoEl.muted = muted;
+    }
+    saveVolume();
+  }
+
+  function handleVolumeScroll(e: WheelEvent) {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? -0.125 : 0.125;
+    setVolume(volume + delta);
+  }
+
+  function startVolumeDrag(e: MouseEvent) {
+    e.preventDefault();
+    const bar = e.currentTarget as HTMLElement;
+    const diamonds = bar.querySelectorAll('.volume-diamond');
+    
+    function dragTo(clientX: number) {
+      const first = diamonds[0].getBoundingClientRect();
+      const last = diamonds[diamonds.length - 1].getBoundingClientRect();
+      const start = first.left;
+      const end = last.right;
+      const ratio = Math.max(0, Math.min(1, (clientX - start) / (end - start)));
+      const segment = Math.ceil(ratio * VOLUME_SEGMENTS);
+      setVolume(segment / VOLUME_SEGMENTS);
+    }
+
+    dragTo(e.clientX);
+
+    function onMouseMove(e: MouseEvent) {
+      dragTo(e.clientX);
+    }
+
+    function onMouseUp() {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    }
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  }
+
+  function saveVolume() {
+    localStorage.setItem('vyu-volume', String(volume));
+  }
+
+  function loadVolume() {
+    const saved = localStorage.getItem('vyu-volume');
+    if (saved !== null) {
+      volume = parseFloat(saved);
+      if (videoEl) videoEl.volume = volume;
+    }
   }
 
   function startScrubbing(e: MouseEvent) {
@@ -161,6 +224,8 @@
   function handleKeydown(e: KeyboardEvent) {
     if (e.key === 'f' || e.key === 'F') toggleFullscreen();
     if (e.key === 'Escape' && isFullscreen) toggleFullscreen();
+    if (e.key === 'ArrowUp') { e.preventDefault(); setVolume(volume + 0.125); }
+    if (e.key === 'ArrowDown') { e.preventDefault(); setVolume(volume - 0.125); }
 
     if (['ArrowRight', 'ArrowLeft', 'ArrowUp', 'ArrowDown', ' '].includes(e.key)) {
       e.preventDefault();
@@ -190,10 +255,11 @@
     if (selected) loadFile(selected as string);
   }
 
-  // onMount — always last
+  // onMount
   onMount(() => {
     const initial = (window as any).__INITIAL_FILE__;
     if (initial) loadFile(initial);
+    loadVolume();
 
     const appWindow = getCurrentWindow();
     appWindow.onDragDropEvent((event) => {
@@ -269,7 +335,46 @@
             </div>
             <div class="controls-row">
               <button class="ctrl-btn" onclick={togglePlay}>{playing ? '⏸' : '▶'}</button>
-              <button class="ctrl-btn" onclick={toggleMute}>{muted ? '🔇' : '🔊'}</button>
+              <div class="volume-control"
+  onmouseenter={() => volumeHovered = true}
+  onmouseleave={() => volumeHovered = false}
+  onwheel={handleVolumeScroll}
+  role="presentation">
+  <button class="ctrl-btn volume-btn" onclick={toggleMute} aria-label="toggle mute">
+    {#if muted || volume === 0}
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M9 4L5 7H2V11H5L9 14V4Z" fill="currentColor"/>
+      <line x1="12" y1="6" x2="16" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      <line x1="16" y1="6" x2="12" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    </svg>
+  {:else if volume < 0.5}
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M9 4L5 7H2V11H5L9 14V4Z" fill="currentColor"/>
+      <path d="M11.5 7C12.5 7.8 13 8.4 13 9C13 9.6 12.5 10.2 11.5 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    </svg>
+  {:else}
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M9 4L5 7H2V11H5L9 14V4Z" fill="currentColor"/>
+      <path d="M11.5 7C12.5 7.8 13 8.4 13 9C13 9.6 12.5 10.2 11.5 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      <path d="M13.5 5C15.5 6.5 16.5 7.7 16.5 9C16.5 10.3 15.5 11.5 13.5 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    </svg>
+  {/if}
+  </button>
+  {#if volumeHovered}
+    <div class="volume-diamonds" onmousedown={startVolumeDrag} role="presentation">
+      {#each Array(VOLUME_SEGMENTS) as _, i}
+        <button
+          class="volume-diamond"
+          class:filled={i < Math.round(volume * VOLUME_SEGMENTS)}
+          style="--i: {i}"
+          onclick={() => setVolume((i + 1) / VOLUME_SEGMENTS)}
+          aria-label="set volume {Math.round((i + 1) / VOLUME_SEGMENTS * 100)}%">
+        </button>
+      {/each}
+      <span class="volume-tooltip">{muted ? '0' : Math.round(volume * 100)}%</span>
+    </div>
+  {/if}
+</div>
               <span class="time-display">{currentTime} / {duration}</span>
             </div>
           </div>
@@ -715,9 +820,87 @@
 
   .time-display {
     font-size: 15px;
-    color: #888888;
+    color: #cccccc;
     font-family: Inter, sans-serif;
     margin-left: auto;
+  }
+
+  /* volume slider */
+
+  .volume-control {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .volume-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .volume-diamonds {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    animation: volumeBarIn 0.2s ease forwards;
+    cursor: pointer;
+  }
+
+  @keyframes volumeBarIn {
+    from {
+      opacity: 0;
+      transform: translateX(-4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  .volume-diamond {
+    width: 10px;
+    height: 10px;
+    background: none;
+    border: 1px solid #555555;
+    transform: rotate(45deg);
+    cursor: pointer;
+    padding: 0;
+    transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+    flex-shrink: 0;
+    animation: diamondSpin 0.3s ease forwards;
+    animation-delay: calc(var(--i) * 0.04s);
+    opacity: 0;
+  }
+
+  @keyframes diamondSpin {
+    from {
+      opacity: 0;
+      transform: rotate(0deg) scale(0.3);
+    }
+    to {
+      opacity: 1;
+      transform: rotate(45deg) scale(1);
+    }
+  }
+
+  .volume-diamond.filled {
+    background: #ffffff;
+    border-color: #ffffff;
+  }
+
+  .volume-diamond:hover {
+    border-color: #aaaaaa;
+    transform: rotate(45deg) scale(1.2);
+  }
+
+  .volume-tooltip {
+    font-size: 11px;
+    color: #666666;
+    font-family: Inter, sans-serif;
+    margin-left: 4px;
+    min-width: 28px;
   }
 
   /* fullscreen */
