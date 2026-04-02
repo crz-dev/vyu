@@ -106,6 +106,20 @@ function handleKeydown(e: KeyboardEvent) {
       if (e.key === 'ArrowLeft') navigate(-1);
     }
   }  
+  
+function closeFile() {
+    filePath = '';
+    fileSrc = '';
+    fileName = 'no file open';
+    isVideo = false;
+    fileList = [];
+    currentIndex = 0;
+    playing = false;
+    progress = 0;
+    currentTime = '0:00';
+    duration = '0:00';
+  }
+
   async function openFileDialog() {
     const selected = await open({
       multiple: false,
@@ -139,6 +153,10 @@ function handleKeydown(e: KeyboardEvent) {
     <span class="app-name">vyu</span>
     <span class="divider">/</span>
     <span class="filename">{fileName}</span>
+    {#if fileSrc}
+      <span class="divider">/</span>
+      <button class="folder-btn" onclick={openFileDialog} aria-label="open file">📁</button>
+    {/if}
   </div>
 
   <div class="content">
@@ -238,9 +256,41 @@ function handleKeydown(e: KeyboardEvent) {
   }
 
   .filename {
-    font-size: 14px;
+    font-size: 12px;
     color: #cccccc;
     font-family: Inter, sans-serif;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 300px;
+  }
+
+  .folder-btn, .close-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 12px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    transition: background 0.2s;
+  }
+
+  .folder-btn {
+    color: #666666;
+  }
+
+  .folder-btn:hover {
+    background: #1a1a1a;
+    color: #aaaaaa;
+  }
+
+  .close-btn {
+    color: #666666;
+  }
+
+  .close-btn:hover {
+    background: #2a1a1a;
+    color: #ff6666;
   }
 
   .content {
@@ -344,7 +394,7 @@ function handleKeydown(e: KeyboardEvent) {
     font-family: Inter, sans-serif;
   }
 
- .video-wrapper {
+  .video-wrapper {
     position: relative;
     display: inline-flex;
     align-items: center;
