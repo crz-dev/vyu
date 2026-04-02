@@ -226,19 +226,19 @@ function handleKeydown(e: KeyboardEvent) {
   }
 
   .app-name {
-    font-size: 12px;
+    font-size: 14px;
     color: #888888;
     font-family: Inter, sans-serif;
   }
 
   .divider {
-    font-size: 12px;
+    font-size: 14px;
     color: #444444;
     font-family: Inter, sans-serif;
   }
 
   .filename {
-    font-size: 12px;
+    font-size: 14px;
     color: #cccccc;
     font-family: Inter, sans-serif;
   }
@@ -261,13 +261,13 @@ function handleKeydown(e: KeyboardEvent) {
   }
 
   .nav-btn {
-    width: 32px;
-    height: 32px;
+    width: 36px;
+    height: 36px;
     border-radius: 50%;
     background: #1a1a1a;
     border: 0.5px solid #2a2a2a;
     color: #444444;
-    font-size: 18px;
+    font-size: 22px;
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -339,7 +339,7 @@ function handleKeydown(e: KeyboardEvent) {
   }
 
   .file-count, .file-info, .zoom {
-    font-size: 11px;
+    font-size: 12px;
     color: #444444;
     font-family: Inter, sans-serif;
   }
@@ -351,7 +351,7 @@ function handleKeydown(e: KeyboardEvent) {
     justify-content: center;
     border: 4px solid transparent;
     border-radius: 2px;
-    transition: border-color 0.2s;
+    transition: border-color 0.5s;
   }
 
   .video-wrapper:hover {
@@ -384,7 +384,7 @@ function handleKeydown(e: KeyboardEvent) {
 
   .progress-bar {
     width: 100%;
-    height: 3px;
+    height: 8px;
     background: #333333;
     border-radius: 2px;
     cursor: pointer;
@@ -411,7 +411,7 @@ function handleKeydown(e: KeyboardEvent) {
     border: none;
     color: #cccccc;
     cursor: pointer;
-    font-size: 13px;
+    font-size: 20px;
     padding: 2px 4px;
     font-family: Inter, sans-serif;
   }
@@ -421,7 +421,7 @@ function handleKeydown(e: KeyboardEvent) {
   }
 
   .time-display {
-    font-size: 11px;
+    font-size: 15px;
     color: #888888;
     font-family: Inter, sans-serif;
     margin-left: auto;
