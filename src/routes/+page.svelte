@@ -91,6 +91,18 @@
     displayFile(fileList[currentIndex]);
   }
 
+  async function minimizeWindow() {
+    await getCurrentWindow().minimize();
+  }
+
+  async function maximizeWindow() {
+    await getCurrentWindow().toggleMaximize();
+  }
+
+  async function closeWindow() {
+    await getCurrentWindow().close();
+  }
+
 function handleKeydown(e: KeyboardEvent) {
     if (['ArrowRight', 'ArrowLeft', 'ArrowUp', 'ArrowDown', ' '].includes(e.key)) {
       e.preventDefault();
@@ -149,14 +161,19 @@ function closeFile() {
 </script>
 
 <main ondrop={(e) => e.preventDefault()} ondragover={(e) => e.preventDefault()}>
-  <div class="topbar">
-    <span class="app-name">vyu</span>
-    <span class="divider">/</span>
-    <span class="filename">{fileName}</span>
+  <div class="topbar" data-tauri-drag-region>
+    <span class="app-name" data-tauri-drag-region>vyu</span>
+    <span class="divider" data-tauri-drag-region>/</span>
+    <span class="filename" data-tauri-drag-region>{fileName}</span>
     {#if fileSrc}
-      <span class="divider">/</span>
+      <span class="divider" data-tauri-drag-region>/</span>
       <button class="folder-btn" onclick={openFileDialog} aria-label="open file">📁</button>
     {/if}
+    <div class="window-controls">
+      <button class="wc-btn minimize" onclick={minimizeWindow} aria-label="minimize">−</button>
+      <button class="wc-btn maximize" onclick={maximizeWindow} aria-label="maximize">▢</button>
+      <button class="wc-btn close" onclick={closeWindow} aria-label="close">✕</button>
+    </div>
   </div>
 
   <div class="content">
@@ -282,6 +299,38 @@ function closeFile() {
   .folder-btn:hover {
     background: #1a1a1a;
     color: #aaaaaa;
+  }
+
+.window-controls {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .wc-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: 4px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s, color 0.2s;
+    color: #666666;
+  }
+
+  .wc-btn:hover {
+    background: #1a1a1a;
+    color: #cccccc;
+  }
+
+  .wc-btn.close:hover {
+    background: #3a1a1a;
+    color: #ff6666;
   }
 
   .close-btn {
