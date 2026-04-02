@@ -5,6 +5,7 @@
   import { readDir } from '@tauri-apps/plugin-fs';
   import { open } from '@tauri-apps/plugin-dialog';
 
+  // state variables
   let filePath = $state('');
   let fileSrc = $state('');
   let fileName = $state('no file open');
@@ -12,6 +13,7 @@
   let fileList: string[] = $state([]);
   let currentIndex = $state(0);
 
+  // video state
   let videoEl = $state<HTMLVideoElement | null>(null);
   let playing = $state(false);
   let muted = $state(false);
@@ -19,18 +21,25 @@
   let currentTime = $state('0:00');
   let duration = $state('0:00');
   let showControls = $state(false);
-  let hoverZone = $state('none');
 
+  // ui state
+  let hoverZone = $state('none');
+  let isFullscreen = $state(false);
+  let zoomLevel = $state(100);
+
+  // constants
   const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'];
   const videoExts = ['mp4', 'webm', 'mkv', 'avi', 'mov', 'wmv'];
   const allExts = [...imageExts, ...videoExts];
 
+  // helper functions
   function formatTime(seconds: number): string {
     const m = Math.floor(seconds / 60);
     const s = Math.floor(seconds % 60);
     return `${m}:${s.toString().padStart(2, '0')}`;
   }
 
+  // video functions
   function updateProgress() {
     if (!videoEl) return;
     progress = (videoEl.currentTime / videoEl.duration) * 100;
@@ -87,6 +96,7 @@
     window.addEventListener('mouseup', onMouseUp);
   }
 
+  // file functions
   function displayFile(path: string) {
     filePath = path;
     fileName = path.split('\\').pop() || path.split('/').pop() || path;
@@ -120,7 +130,8 @@
     displayFile(fileList[currentIndex]);
   }
 
-async function minimizeWindow() {
+  // window functions
+  async function minimizeWindow() {
     await getCurrentWindow().minimize();
   }
 
@@ -132,19 +143,34 @@ async function minimizeWindow() {
     await getCurrentWindow().close();
   }
 
-async function startDrag(e: MouseEvent) {
+  function toggleFullscreen() {
+    isFullscreen = !isFullscreen;
+  }
+
+  function resetZoom() {
+    zoomLevel = 100;
+  }
+
+  async function startDrag(e: MouseEvent) {
     if ((e.target as HTMLElement).closest('button')) return;
     await getCurrentWindow().startDragging();
   }
 
+  // event handlers
   function handleKeydown(e: KeyboardEvent) {
+    if (e.key === 'f' || e.key === 'F') toggleFullscreen();
+    if (e.key === 'Escape' && isFullscreen) toggleFullscreen();
+
     if (['ArrowRight', 'ArrowLeft', 'ArrowUp', 'ArrowDown', ' '].includes(e.key)) {
       e.preventDefault();
     }
-    if (isVideo && videoEl && hoverZone === 'video') {
+
+    const videoMode = isVideo && videoEl && (hoverZone === 'video' || isFullscreen);
+
+    if (videoMode) {
       if (e.key === ' ') togglePlay();
-      if (e.key === 'ArrowRight') videoEl.currentTime = Math.min(videoEl.currentTime + 5, videoEl.duration);
-      if (e.key === 'ArrowLeft') videoEl.currentTime = Math.max(videoEl.currentTime - 5, 0);
+      if (e.key === 'ArrowRight') videoEl!.currentTime = Math.min(videoEl!.currentTime + 5, videoEl!.duration);
+      if (e.key === 'ArrowLeft') videoEl!.currentTime = Math.max(videoEl!.currentTime - 5, 0);
     } else {
       if (e.key === ' ' && isVideo && videoEl) togglePlay();
       if (e.key === 'ArrowRight') navigate(1);
@@ -163,6 +189,7 @@ async function startDrag(e: MouseEvent) {
     if (selected) loadFile(selected as string);
   }
 
+  // onMount — always last
   onMount(() => {
     const initial = (window as any).__INITIAL_FILE__;
     if (initial) loadFile(initial);
@@ -180,16 +207,20 @@ async function startDrag(e: MouseEvent) {
   });
 </script>
 
-<main ondrop={(e) => e.preventDefault()} ondragover={(e) => e.preventDefault()}>
+<main
+  class:fullscreen={isFullscreen}
+  ondrop={(e) => e.preventDefault()}
+  ondragover={(e) => e.preventDefault()}>
+
   <div class="topbar" onmousedown={startDrag} role="toolbar" tabindex="-1">
-    <span class="app-name" data-tauri-drag-region>vyu</span>
-    <span class="divider" data-tauri-drag-region>/</span>
-    <span class="filename" data-tauri-drag-region>{fileName}</span>
+    <span class="app-name">vyu</span>
+    <span class="divider">/</span>
+    <span class="filename">{fileName}</span>
     {#if fileSrc}
-      <span class="divider" data-tauri-drag-region>/</span>
+      <span class="divider">/</span>
       <button class="folder-btn" onclick={openFileDialog} aria-label="open file">📁</button>
     {/if}
-    <div class="window-controls" data-tauri-drag-region>
+    <div class="window-controls">
       <button class="wc-btn minimize" onclick={minimizeWindow} aria-label="minimize">−</button>
       <button class="wc-btn maximize" onclick={maximizeWindow} aria-label="maximize">▢</button>
       <button class="wc-btn close" onclick={closeWindow} aria-label="close">✕</button>
@@ -224,7 +255,7 @@ async function startDrag(e: MouseEvent) {
             <track kind="captions" />
           </video>
           <div class="video-controls">
-            <div class="progress-bar" 
+            <div class="progress-bar"
               onmousedown={startScrubbing}
               role="slider"
               aria-label="video scrubber"
@@ -261,8 +292,70 @@ async function startDrag(e: MouseEvent) {
   <div class="bottombar">
     <span class="file-count">{fileList.length > 0 ? `${currentIndex + 1} / ${fileList.length}` : '—'}</span>
     <span class="file-info">{fileName}</span>
-    <span class="zoom">100%</span>
+    <div class="bottombar-right">
+      <span class="zoom" onclick={resetZoom} role="button" tabindex="0">{zoomLevel}%</span>
+      <button class="fs-btn" onclick={toggleFullscreen} aria-label="toggle fullscreen">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M1 4V1H4M8 1H11V4M11 8V11H8M4 11H1V8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+        </svg>
+      </button>
+    </div>
   </div>
+
+  {#if isFullscreen}
+    <div class="fs-overlay">
+      <div class="fs-topbar">
+        <span class="fs-filename">{fileName}</span>
+        <div class="fs-window-controls">
+          <button class="fs-wc-btn" onclick={minimizeWindow} aria-label="minimize">−</button>
+          <button class="fs-wc-btn" onclick={maximizeWindow} aria-label="maximize">▢</button>
+          <button class="fs-wc-btn close" onclick={closeWindow} aria-label="close">✕</button>
+        </div>
+      </div>
+
+      {#if isVideo && videoEl}
+        <div class="fs-controls">
+          <div class="fs-progress"
+            onmousedown={startScrubbing}
+            role="slider"
+            aria-label="video scrubber"
+            aria-valuenow={progress}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            tabindex="0">
+            <div class="fs-progress-fill" style="width: {progress}%"></div>
+            <div class="fs-progress-diamond" style="left: {progress}%"></div>
+          </div>
+          <div class="fs-controls-row">
+            <button class="fs-ctrl-btn" onclick={togglePlay} aria-label="play/pause">{playing ? '⏸' : '▶'}</button>
+            <button class="fs-ctrl-btn" onclick={toggleMute} aria-label="mute">{muted ? '🔇' : '🔊'}</button>
+            <span class="fs-time">{currentTime} / {duration}</span>
+            <div class="fs-right">
+              <button class="fs-ctrl-btn" onclick={toggleFullscreen} aria-label="exit fullscreen">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M4 1H1V4M8 1H11V4M11 8V11H8M4 11H1V8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      {:else}
+        <div class="fs-controls image-only">
+          <div class="fs-controls-row">
+            <span class="fs-time">{fileList.length > 0 ? `${currentIndex + 1} / ${fileList.length}` : ''}</span>
+            <div class="fs-right">
+              <button class="fs-ctrl-btn" onclick={toggleFullscreen} aria-label="exit fullscreen">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M4 1H1V4M8 1H11V4M11 8V11H8M4 11H1V8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      {/if}
+    </div>
+  {/if}
+
 </main>
 
 <style>
@@ -277,6 +370,7 @@ async function startDrag(e: MouseEvent) {
     flex-direction: column;
   }
 
+  /* topbar */
   .topbar {
     height: 36px;
     background: #111111;
@@ -368,6 +462,7 @@ async function startDrag(e: MouseEvent) {
     opacity: 1;
   }
 
+  /* content */
   .content {
     flex: 1;
     display: flex;
@@ -376,6 +471,7 @@ async function startDrag(e: MouseEvent) {
     background: #0a0a0a;
   }
 
+  /* sidebars */
   .sidebar {
     width: 48px;
     background: transparent;
@@ -406,6 +502,7 @@ async function startDrag(e: MouseEvent) {
     background: #222222;
   }
 
+  /* viewer */
   .viewer {
     flex: 1;
     display: flex;
@@ -452,6 +549,7 @@ async function startDrag(e: MouseEvent) {
     font-family: Inter, sans-serif;
   }
 
+  /* bottombar */
   .bottombar {
     height: 36px;
     background: #0d0d0d;
@@ -463,12 +561,50 @@ async function startDrag(e: MouseEvent) {
     flex-shrink: 0;
   }
 
-  .file-count, .file-info, .zoom {
+  .file-count, .file-info {
     font-size: 12px;
     color: #444444;
     font-family: Inter, sans-serif;
   }
 
+  .bottombar-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .zoom {
+    font-size: 12px;
+    color: #444444;
+    font-family: Inter, sans-serif;
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: 3px;
+    transition: color 0.2s;
+  }
+
+  .zoom:hover {
+    color: #888888;
+  }
+
+  .fs-btn {
+    background: none;
+    border: none;
+    color: #444444;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px;
+    border-radius: 3px;
+    transition: color 0.2s;
+  }
+
+  .fs-btn:hover {
+    color: #888888;
+  }
+
+  /* video */
   .video-wrapper {
     position: relative;
     display: inline-flex;
@@ -493,10 +629,6 @@ async function startDrag(e: MouseEvent) {
     width: auto;
     height: auto;
     object-fit: contain;
-  }
-
-  .video-wrapper:hover video {
-    border-color: #444444;
   }
 
   .video-controls {
@@ -577,5 +709,182 @@ async function startDrag(e: MouseEvent) {
     color: #888888;
     font-family: Inter, sans-serif;
     margin-left: auto;
+  }
+
+  /* fullscreen */
+  main.fullscreen .topbar {
+    display: none;
+  }
+
+  main.fullscreen .bottombar {
+    display: none;
+  }
+
+  main.fullscreen .sidebar {
+    display: none;
+  }
+
+  main.fullscreen .viewer {
+    padding: 0;
+  }
+
+  main.fullscreen .video-controls {
+    display: none;
+  }
+
+  main.fullscreen .video-wrapper {
+    width: 100%;
+    height: 100%;
+  }
+
+  main.fullscreen .video-wrapper video {
+    max-width: 100vw;
+    max-height: 100vh;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+
+  .fs-overlay {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s;
+    z-index: 100;
+  }
+
+  main.fullscreen:hover .fs-overlay {
+    opacity: 1;
+    pointer-events: all;
+  }
+
+  .fs-topbar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    padding: 0 16px;
+    height: 40px;
+    background: linear-gradient(rgba(0,0,0,0.85), transparent);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .fs-filename {
+    font-size: 12px;
+    color: #888888;
+    font-family: Inter, sans-serif;
+  }
+
+  .fs-window-controls {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .fs-wc-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: 4px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s, color 0.2s;
+    color: #666666;
+  }
+
+  .fs-wc-btn:hover {
+    background: rgba(255,255,255,0.1);
+    color: #cccccc;
+  }
+
+  .fs-wc-btn.close:hover {
+    background: rgba(255,0,0,0.2);
+    color: #ff6666;
+  }
+
+  .fs-controls {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 12px 16px;
+    background: linear-gradient(transparent, rgba(0,0,0,0.85));
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .fs-controls.image-only {
+    background: linear-gradient(transparent, rgba(0,0,0,0.6));
+  }
+
+  .fs-progress {
+    width: 100%;
+    height: 4px;
+    background: rgba(255,255,255,0.2);
+    border-radius: 2px;
+    cursor: pointer;
+    position: relative;
+    overflow: visible;
+  }
+
+  .fs-progress-fill {
+    height: 100%;
+    background: #ffffff;
+    border-radius: 2px;
+    pointer-events: none;
+  }
+
+  .fs-progress-diamond {
+    position: absolute;
+    top: 50%;
+    width: 12px;
+    height: 12px;
+    background: #ffffff;
+    transform: translate(-50%, -50%) rotate(45deg);
+    pointer-events: none;
+  }
+
+  .fs-controls-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .fs-ctrl-btn {
+    background: none;
+    border: none;
+    color: #cccccc;
+    cursor: pointer;
+    font-size: 16px;
+    padding: 2px 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.2s;
+  }
+
+  .fs-ctrl-btn:hover {
+    color: #ffffff;
+  }
+
+  .fs-time {
+    font-size: 12px;
+    color: #888888;
+    font-family: Inter, sans-serif;
+  }
+
+  .fs-right {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
   }
 </style>
