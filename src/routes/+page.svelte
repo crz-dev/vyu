@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { convertFileSrc } from '@tauri-apps/api/core';
   import { getCurrentWindow } from '@tauri-apps/api/window';
-  import { readDir } from '@tauri-apps/plugin-fs';
+  import { readDir, stat } from '@tauri-apps/plugin-fs';
   import { open } from '@tauri-apps/plugin-dialog';
 
   // state variables
@@ -12,6 +12,10 @@
   let isVideo = $state(false);
   let fileList: string[] = $state([]);
   let currentIndex = $state(0);
+
+  // file info state
+  let fileSize = $state('');
+  let fileDimensions = $state('');
 
   // video state
   let videoEl = $state<HTMLVideoElement | null>(null);
@@ -43,7 +47,13 @@
     const m = Math.floor(seconds / 60);
     const s = Math.floor(seconds % 60);
     return `${m}:${s.toString().padStart(2, '0')}`;
-  } 
+  }
+
+  function formatFileSize(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
 
   // video functions
   function updateProgress() {
@@ -86,7 +96,7 @@
     e.preventDefault();
     const bar = e.currentTarget as HTMLElement;
     const diamonds = bar.querySelectorAll('.volume-diamond');
-    
+
     function dragTo(clientX: number) {
       const first = diamonds[0].getBoundingClientRect();
       const last = diamonds[diamonds.length - 1].getBoundingClientRect();
@@ -99,10 +109,7 @@
 
     dragTo(e.clientX);
 
-    function onMouseMove(e: MouseEvent) {
-      dragTo(e.clientX);
-    }
-
+    function onMouseMove(e: MouseEvent) { dragTo(e.clientX); }
     function onMouseUp() {
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('mouseup', onMouseUp);
@@ -161,16 +168,34 @@
   }
 
   // file functions
-  function displayFile(path: string) {
+  async function displayFile(path: string) {
     filePath = path;
     fileName = path.split('\\').pop() || path.split('/').pop() || path;
     const ext = path.split('.').pop()?.toLowerCase() || '';
     isVideo = videoExts.includes(ext);
     fileSrc = convertFileSrc(path);
+    fileSize = '';
+    fileDimensions = '';
+
+    try {
+      const info = await stat(path);
+      fileSize = formatFileSize(info.size);
+    } catch {}
+  }
+
+  function onImageLoad(e: Event) {
+    const img = e.target as HTMLImageElement;
+    fileDimensions = `${img.naturalWidth} × ${img.naturalHeight}`;
+  }
+
+  function onVideoLoad() {
+    if (!videoEl) return;
+    fileDimensions = `${videoEl.videoWidth} × ${videoEl.videoHeight}`;
+    videoEl.volume = volume;
   }
 
   async function loadFile(path: string) {
-    displayFile(path);
+    await displayFile(path);
     const sep = path.includes('\\') ? '\\' : '/';
     const folder = path.substring(0, path.lastIndexOf(sep));
     try {
@@ -192,6 +217,21 @@
     if (fileList.length === 0) return;
     currentIndex = (currentIndex + direction + fileList.length) % fileList.length;
     displayFile(fileList[currentIndex]);
+  }
+
+  function closeFile() {
+    filePath = '';
+    fileSrc = '';
+    fileName = 'no file open';
+    isVideo = false;
+    fileList = [];
+    currentIndex = 0;
+    playing = false;
+    progress = 0;
+    currentTime = '0:00';
+    duration = '0:00';
+    fileSize = '';
+    fileDimensions = '';
   }
 
   // window functions
@@ -227,7 +267,7 @@
     if (e.key === 'ArrowUp') { e.preventDefault(); setVolume(volume + 0.125); }
     if (e.key === 'ArrowDown') { e.preventDefault(); setVolume(volume - 0.125); }
 
-    if (['ArrowRight', 'ArrowLeft', 'ArrowUp', 'ArrowDown', ' '].includes(e.key)) {
+    if (['ArrowRight', 'ArrowLeft', ' '].includes(e.key)) {
       e.preventDefault();
     }
 
@@ -255,7 +295,7 @@
     if (selected) loadFile(selected as string);
   }
 
-  // onMount
+  // onMount — always last
   onMount(() => {
     const initial = (window as any).__INITIAL_FILE__;
     if (initial) loadFile(initial);
@@ -286,6 +326,7 @@
     {#if fileSrc}
       <span class="divider">/</span>
       <button class="folder-btn" onclick={openFileDialog} aria-label="open file">📁</button>
+      <button class="folder-btn" onclick={closeFile} aria-label="close file">⏏</button>
     {/if}
     <div class="window-controls">
       <button class="wc-btn minimize" onclick={minimizeWindow} aria-label="minimize">−</button>
@@ -307,7 +348,7 @@
       onmouseleave={() => hoverZone = 'none'}
       role="presentation">
       {#if fileSrc && !isVideo}
-        <img src={fileSrc} alt={fileName} />
+        <img src={fileSrc} alt={fileName} onload={onImageLoad} />
       {:else if fileSrc && isVideo}
         <div class="video-wrapper"
           role="presentation"
@@ -318,6 +359,7 @@
             src={fileSrc}
             autoplay
             ontimeupdate={updateProgress}
+            onloadedmetadata={onVideoLoad}
           >
             <track kind="captions" />
           </video>
@@ -334,47 +376,58 @@
               <div class="progress-diamond" style="left: {progress}%"></div>
             </div>
             <div class="controls-row">
-              <button class="ctrl-btn" onclick={togglePlay}>{playing ? '⏸' : '▶'}</button>
+              <button class="ctrl-btn" onclick={togglePlay} aria-label="play/pause">
+                {#if playing}
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="3" y="2" width="3.5" height="12" rx="1" fill="currentColor"/>
+                    <rect x="9.5" y="2" width="3.5" height="12" rx="1" fill="currentColor"/>
+                  </svg>
+                {:else}
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M4 2.5L13 8L4 13.5V2.5Z" fill="currentColor"/>
+                  </svg>
+                {/if}
+              </button>
               <div class="volume-control"
-  onmouseenter={() => volumeHovered = true}
-  onmouseleave={() => volumeHovered = false}
-  onwheel={handleVolumeScroll}
-  role="presentation">
-  <button class="ctrl-btn volume-btn" onclick={toggleMute} aria-label="toggle mute">
-    {#if muted || volume === 0}
-    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M9 4L5 7H2V11H5L9 14V4Z" fill="currentColor"/>
-      <line x1="12" y1="6" x2="16" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-      <line x1="16" y1="6" x2="12" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-    </svg>
-  {:else if volume < 0.5}
-    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M9 4L5 7H2V11H5L9 14V4Z" fill="currentColor"/>
-      <path d="M11.5 7C12.5 7.8 13 8.4 13 9C13 9.6 12.5 10.2 11.5 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-    </svg>
-  {:else}
-    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M9 4L5 7H2V11H5L9 14V4Z" fill="currentColor"/>
-      <path d="M11.5 7C12.5 7.8 13 8.4 13 9C13 9.6 12.5 10.2 11.5 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-      <path d="M13.5 5C15.5 6.5 16.5 7.7 16.5 9C16.5 10.3 15.5 11.5 13.5 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-    </svg>
-  {/if}
-  </button>
-  {#if volumeHovered}
-    <div class="volume-diamonds" onmousedown={startVolumeDrag} role="presentation">
-      {#each Array(VOLUME_SEGMENTS) as _, i}
-        <button
-          class="volume-diamond"
-          class:filled={i < Math.round(volume * VOLUME_SEGMENTS)}
-          style="--i: {i}"
-          onclick={() => setVolume((i + 1) / VOLUME_SEGMENTS)}
-          aria-label="set volume {Math.round((i + 1) / VOLUME_SEGMENTS * 100)}%">
-        </button>
-      {/each}
-      <span class="volume-tooltip">{muted ? '0' : Math.round(volume * 100)}%</span>
-    </div>
-  {/if}
-</div>
+                onmouseenter={() => volumeHovered = true}
+                onmouseleave={() => volumeHovered = false}
+                onwheel={handleVolumeScroll}
+                role="presentation">
+                <button class="ctrl-btn volume-btn" onclick={toggleMute} aria-label="toggle mute">
+                  {#if muted || volume === 0}
+                    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M9 4L5 7H2V11H5L9 14V4Z" fill="currentColor"/>
+                      <line x1="12" y1="6" x2="16" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                      <line x1="16" y1="6" x2="12" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                    </svg>
+                  {:else if volume < 0.5}
+                    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M9 4L5 7H2V11H5L9 14V4Z" fill="currentColor"/>
+                      <path d="M11.5 7C12.5 7.8 13 8.4 13 9C13 9.6 12.5 10.2 11.5 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                    </svg>
+                  {:else}
+                    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M9 4L5 7H2V11H5L9 14V4Z" fill="currentColor"/>
+                      <path d="M11.5 7C12.5 7.8 13 8.4 13 9C13 9.6 12.5 10.2 11.5 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                      <path d="M13.5 5C15.5 6.5 16.5 7.7 16.5 9C16.5 10.3 15.5 11.5 13.5 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                    </svg>
+                  {/if}
+                </button>
+                {#if volumeHovered}
+                  <div class="volume-diamonds" onmousedown={startVolumeDrag} role="presentation">
+                    {#each Array(VOLUME_SEGMENTS) as _, i}
+                      <button
+                        class="volume-diamond"
+                        class:filled={i < Math.round(volume * VOLUME_SEGMENTS)}
+                        style="--i: {i}"
+                        onclick={() => setVolume((i + 1) / VOLUME_SEGMENTS)}
+                        aria-label="set volume {Math.round((i + 1) / VOLUME_SEGMENTS * 100)}%">
+                      </button>
+                    {/each}
+                    <span class="volume-tooltip">{muted ? '0' : Math.round(volume * 100)}%</span>
+                  </div>
+                {/if}
+              </div>
               <span class="time-display">{currentTime} / {duration}</span>
             </div>
           </div>
@@ -397,7 +450,15 @@
 
   <div class="bottombar">
     <span class="file-count">{fileList.length > 0 ? `${currentIndex + 1} / ${fileList.length}` : '—'}</span>
-    <span class="file-info">{fileName}</span>
+    <span class="file-info">
+      {#if fileDimensions && fileSize}
+        {fileDimensions} · {fileSize}
+      {:else if fileName !== 'no file open'}
+        {fileName}
+      {:else}
+        no file open
+      {/if}
+    </span>
     <div class="bottombar-right">
       <span class="zoom" onclick={resetZoom} role="button" tabindex="0">{zoomLevel}%</span>
       <button class="fs-btn" onclick={toggleFullscreen} aria-label="toggle fullscreen">
@@ -441,8 +502,38 @@
             <div class="fs-progress-diamond" style="left: {progress}%"></div>
           </div>
           <div class="fs-controls-row">
-            <button class="fs-ctrl-btn" onclick={togglePlay} aria-label="play/pause">{playing ? '⏸' : '▶'}</button>
-            <button class="fs-ctrl-btn" onclick={toggleMute} aria-label="mute">{muted ? '🔇' : '🔊'}</button>
+            <button class="fs-ctrl-btn" onclick={togglePlay} aria-label="play/pause">
+              {#if playing}
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <rect x="3" y="2" width="3.5" height="12" rx="1" fill="currentColor"/>
+                  <rect x="9.5" y="2" width="3.5" height="12" rx="1" fill="currentColor"/>
+                </svg>
+              {:else}
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M4 2.5L13 8L4 13.5V2.5Z" fill="currentColor"/>
+                </svg>
+              {/if}
+            </button>
+            <button class="fs-ctrl-btn" onclick={toggleMute} aria-label="mute">
+              {#if muted || volume === 0}
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M9 4L5 7H2V11H5L9 14V4Z" fill="currentColor"/>
+                  <line x1="12" y1="6" x2="16" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                  <line x1="16" y1="6" x2="12" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>
+              {:else if volume < 0.5}
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M9 4L5 7H2V11H5L9 14V4Z" fill="currentColor"/>
+                  <path d="M11.5 7C12.5 7.8 13 8.4 13 9C13 9.6 12.5 10.2 11.5 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>
+              {:else}
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M9 4L5 7H2V11H5L9 14V4Z" fill="currentColor"/>
+                  <path d="M11.5 7C12.5 7.8 13 8.4 13 9C13 9.6 12.5 10.2 11.5 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                  <path d="M13.5 5C15.5 6.5 16.5 7.7 16.5 9C16.5 10.3 15.5 11.5 13.5 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>
+              {/if}
+            </button>
             <span class="fs-time">{currentTime} / {duration}</span>
             <div class="fs-right">
               <button class="fs-ctrl-btn" onclick={toggleFullscreen} aria-label="exit fullscreen">
@@ -809,9 +900,12 @@
     border: none;
     color: #cccccc;
     cursor: pointer;
-    font-size: 20px;
+    font-size: 16px;
     padding: 2px 4px;
     font-family: Inter, sans-serif;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
   .ctrl-btn:hover {
@@ -825,8 +919,7 @@
     margin-left: auto;
   }
 
-  /* volume slider */
-
+  /* volume */
   .volume-control {
     position: relative;
     display: flex;
@@ -849,14 +942,8 @@
   }
 
   @keyframes volumeBarIn {
-    from {
-      opacity: 0;
-      transform: translateX(-4px);
-    }
-    to {
-      opacity: 1;
-      transform: translateX(0);
-    }
+    from { opacity: 0; transform: translateX(-4px); }
+    to { opacity: 1; transform: translateX(0); }
   }
 
   .volume-diamond {
@@ -875,14 +962,8 @@
   }
 
   @keyframes diamondSpin {
-    from {
-      opacity: 0;
-      transform: rotate(0deg) scale(0.3);
-    }
-    to {
-      opacity: 1;
-      transform: rotate(45deg) scale(1);
-    }
+    from { opacity: 0; transform: rotate(0deg) scale(0.3); }
+    to { opacity: 1; transform: rotate(45deg) scale(1); }
   }
 
   .volume-diamond.filled {
@@ -904,25 +985,11 @@
   }
 
   /* fullscreen */
-  main.fullscreen .topbar {
-    display: none;
-  }
-
-  main.fullscreen .bottombar {
-    display: none;
-  }
-
-  main.fullscreen .sidebar {
-    display: none;
-  }
-
-  main.fullscreen .viewer {
-    padding: 0;
-  }
-
-  main.fullscreen .video-controls {
-    display: none;
-  }
+  main.fullscreen .topbar { display: none; }
+  main.fullscreen .bottombar { display: none; }
+  main.fullscreen .sidebar { display: none; }
+  main.fullscreen .viewer { padding: 0; }
+  main.fullscreen .video-controls { display: none; }
 
   main.fullscreen .video-wrapper {
     width: 100%;
@@ -1089,13 +1156,8 @@
     justify-content: center;
   }
 
-  .fs-nav-left {
-    left: 16px;
-  }
-
-  .fs-nav-right {
-    right: 16px;
-  }
+  .fs-nav-left { left: 16px; }
+  .fs-nav-right { right: 16px; }
 
   .fs-nav-btn {
     width: 40px;
@@ -1117,5 +1179,4 @@
     color: #cccccc;
     background: rgba(0,0,0,0.7);
   }
-
 </style>
