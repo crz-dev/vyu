@@ -19,8 +19,8 @@
         "minHeight": 300,
         "dragDropEnabled": true,
         "decorations": false
-      }
-    ],
+  }
+],
     "security": {
       "csp": null,
       "assetProtocol": {

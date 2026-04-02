@@ -91,7 +91,7 @@
     displayFile(fileList[currentIndex]);
   }
 
-  async function minimizeWindow() {
+async function minimizeWindow() {
     await getCurrentWindow().minimize();
   }
 
@@ -103,11 +103,15 @@
     await getCurrentWindow().close();
   }
 
-function handleKeydown(e: KeyboardEvent) {
+async function startDrag(e: MouseEvent) {
+    if ((e.target as HTMLElement).closest('button')) return;
+    await getCurrentWindow().startDragging();
+  }
+
+  function handleKeydown(e: KeyboardEvent) {
     if (['ArrowRight', 'ArrowLeft', 'ArrowUp', 'ArrowDown', ' '].includes(e.key)) {
       e.preventDefault();
     }
-
     if (isVideo && videoEl && hoverZone === 'video') {
       if (e.key === ' ') togglePlay();
       if (e.key === 'ArrowRight') videoEl.currentTime = Math.min(videoEl.currentTime + 5, videoEl.duration);
@@ -117,19 +121,6 @@ function handleKeydown(e: KeyboardEvent) {
       if (e.key === 'ArrowRight') navigate(1);
       if (e.key === 'ArrowLeft') navigate(-1);
     }
-  }  
-  
-function closeFile() {
-    filePath = '';
-    fileSrc = '';
-    fileName = 'no file open';
-    isVideo = false;
-    fileList = [];
-    currentIndex = 0;
-    playing = false;
-    progress = 0;
-    currentTime = '0:00';
-    duration = '0:00';
   }
 
   async function openFileDialog() {
@@ -161,7 +152,7 @@ function closeFile() {
 </script>
 
 <main ondrop={(e) => e.preventDefault()} ondragover={(e) => e.preventDefault()}>
-  <div class="topbar" data-tauri-drag-region>
+  <div class="topbar" onmousedown={startDrag} role="toolbar" tabindex="-1">
     <span class="app-name" data-tauri-drag-region>vyu</span>
     <span class="divider" data-tauri-drag-region>/</span>
     <span class="filename" data-tauri-drag-region>{fileName}</span>
@@ -169,7 +160,7 @@ function closeFile() {
       <span class="divider" data-tauri-drag-region>/</span>
       <button class="folder-btn" onclick={openFileDialog} aria-label="open file">📁</button>
     {/if}
-    <div class="window-controls">
+    <div class="window-controls" data-tauri-drag-region>
       <button class="wc-btn minimize" onclick={minimizeWindow} aria-label="minimize">−</button>
       <button class="wc-btn maximize" onclick={maximizeWindow} aria-label="maximize">▢</button>
       <button class="wc-btn close" onclick={closeWindow} aria-label="close">✕</button>
@@ -258,6 +249,8 @@ function closeFile() {
     padding: 0 16px;
     gap: 8px;
     flex-shrink: 0;
+    cursor: grab;
+    user-select: none;
   }
 
   .app-name {
@@ -282,7 +275,7 @@ function closeFile() {
     max-width: 300px;
   }
 
-  .folder-btn, .close-btn {
+  .folder-btn {
     background: none;
     border: none;
     cursor: pointer;
@@ -290,9 +283,6 @@ function closeFile() {
     padding: 2px 6px;
     border-radius: 4px;
     transition: background 0.2s;
-  }
-
-  .folder-btn {
     color: #666666;
   }
 
@@ -301,7 +291,7 @@ function closeFile() {
     color: #aaaaaa;
   }
 
-.window-controls {
+  .window-controls {
     margin-left: auto;
     display: flex;
     align-items: center;
@@ -333,13 +323,12 @@ function closeFile() {
     color: #ff6666;
   }
 
-  .close-btn {
-    color: #666666;
+  .wc-btn.maximize svg {
+    opacity: 0.75;
   }
 
-  .close-btn:hover {
-    background: #2a1a1a;
-    color: #ff6666;
+  .wc-btn.maximize:hover svg {
+    opacity: 1;
   }
 
   .content {
