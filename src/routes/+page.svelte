@@ -51,11 +51,40 @@
     muted = videoEl.muted;
   }
 
-  function seekVideo(e: MouseEvent) {
+  function startScrubbing(e: MouseEvent) {
+    e.preventDefault();
     if (!videoEl) return;
+
     const bar = e.currentTarget as HTMLElement;
-    const ratio = e.offsetX / bar.offsetWidth;
-    videoEl.currentTime = ratio * videoEl.duration;
+    const wasPlaying = !videoEl.paused;
+    videoEl.pause();
+
+    function scrubTo(clientX: number) {
+      const rect = bar.getBoundingClientRect();
+      const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+      videoEl!.currentTime = ratio * videoEl!.duration;
+      progress = ratio * 100;
+      currentTime = formatTime(videoEl!.currentTime);
+    }
+
+    scrubTo(e.clientX);
+
+    let lastScrub = 0;
+    function onMouseMove(e: MouseEvent) {
+      const now = Date.now();
+      if (now - lastScrub < 60) return;
+      lastScrub = now;
+      scrubTo(e.clientX);
+    }
+
+    function onMouseUp() {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+      if (wasPlaying) videoEl!.play();
+    }
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
   }
 
   function displayFile(path: string) {
@@ -195,9 +224,17 @@ async function startDrag(e: MouseEvent) {
             <track kind="captions" />
           </video>
           <div class="video-controls">
-            <button class="progress-bar" onclick={seekVideo} aria-label="seek video">
+            <div class="progress-bar" 
+              onmousedown={startScrubbing}
+              role="slider"
+              aria-label="video scrubber"
+              aria-valuenow={progress}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              tabindex="0">
               <div class="progress-fill" style="width: {progress}%"></div>
-            </button>
+              <div class="progress-diamond" style="left: {progress}%"></div>
+            </div>
             <div class="controls-row">
               <button class="ctrl-btn" onclick={togglePlay}>{playing ? '⏸' : '▶'}</button>
               <button class="ctrl-btn" onclick={toggleMute}>{muted ? '🔇' : '🔊'}</button>
@@ -437,19 +474,29 @@ async function startDrag(e: MouseEvent) {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    border: 4px solid transparent;
+    max-width: 100%;
+    max-height: 100%;
+    line-height: 0;
     border-radius: 2px;
-    transition: border-color 0.5s;
+    outline: 4px solid transparent;
+    transition: outline-color 0.5s;
   }
 
   .video-wrapper:hover {
-    border-color: #444444;
+    outline-color: #444444;
   }
 
   .video-wrapper video {
-    max-width: 100%;
-    max-height: 100%;
     display: block;
+    max-width: calc(100vw - 96px - 32px);
+    max-height: calc(100vh - 36px - 36px - 32px);
+    width: auto;
+    height: auto;
+    object-fit: contain;
+  }
+
+  .video-wrapper:hover video {
+    border-color: #444444;
   }
 
   .video-controls {
@@ -479,6 +526,7 @@ async function startDrag(e: MouseEvent) {
     position: relative;
     border: none;
     padding: 0;
+    overflow: visible;
   }
 
   .progress-fill {
@@ -486,6 +534,22 @@ async function startDrag(e: MouseEvent) {
     background: #ffffff;
     border-radius: 2px;
     pointer-events: none;
+  }
+
+  .progress-diamond {
+    position: absolute;
+    top: 50%;
+    width: 14px;
+    height: 14px;
+    background: #ffffff;
+    transform: translate(-50%, -50%) rotate(45deg);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  .video-wrapper:hover .progress-diamond {
+    opacity: 1;
   }
 
   .controls-row {
