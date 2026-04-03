@@ -35,6 +35,7 @@
   let hoverZone = $state('none');
   let isFullscreen = $state(false);
   let zoomLevel = $state(100);
+  let fileInfoLoading = $state(false);
 
   // constants
   const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'];
@@ -176,11 +177,14 @@
     fileSrc = convertFileSrc(path);
     fileSize = '';
     fileDimensions = '';
+    fileInfoLoading = true;
 
     try {
       const info = await stat(path);
       fileSize = formatFileSize(info.size);
     } catch {}
+    
+    fileInfoLoading = false;
   }
 
   function onImageLoad(e: Event) {
@@ -325,8 +329,9 @@
     <span class="filename">{fileName}</span>
     {#if fileSrc}
       <span class="divider">/</span>
+      <button class="folder-btn" onclick={closeFile} aria-label="close file">⏏️</button>
+      <span class="divider">/</span>
       <button class="folder-btn" onclick={openFileDialog} aria-label="open file">📁</button>
-      <button class="folder-btn" onclick={closeFile} aria-label="close file">⏏</button>
     {/if}
     <div class="window-controls">
       <button class="wc-btn minimize" onclick={minimizeWindow} aria-label="minimize">−</button>
@@ -453,9 +458,9 @@
     <span class="file-info">
       {#if fileDimensions && fileSize}
         {fileDimensions} · {fileSize}
-      {:else if fileName !== 'no file open'}
+      {:else if !fileInfoLoading && fileName !== 'no file open'}
         {fileName}
-      {:else}
+      {:else if !fileSrc}
         no file open
       {/if}
     </span>
@@ -625,6 +630,19 @@
   .folder-btn:hover {
     background: #1a1a1a;
     color: #aaaaaa;
+  }
+
+  .topbar-sep {
+    width: 0.5px;
+    height: 14px;
+    background: #2a2a2a;
+    flex-shrink: 0;
+  }
+
+  .eject-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
   .window-controls {
@@ -906,6 +924,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    width: 28px;
+    height: 28px;
   }
 
   .ctrl-btn:hover {
@@ -924,7 +944,7 @@
     position: relative;
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 4px;
   }
 
   .volume-btn {
