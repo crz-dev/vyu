@@ -595,7 +595,7 @@
   }
 
   .app-name {
-    font-size: 14px;
+    font-size: 16px;
     color: #888888;
     font-family: Inter, sans-serif;
   }
@@ -933,7 +933,7 @@
   }
 
   .time-display {
-    font-size: 15px;
+    font-size: 16px;
     color: #cccccc;
     font-family: Inter, sans-serif;
     margin-left: auto;
@@ -944,7 +944,7 @@
     position: relative;
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 2px;
   }
 
   .volume-btn {
@@ -967,8 +967,8 @@
   }
 
   .volume-diamond {
-    width: 10px;
-    height: 10px;
+    width: 12px;
+    height: 12px;
     background: none;
     border: 1px solid #555555;
     transform: rotate(45deg);
@@ -997,7 +997,7 @@
   }
 
   .volume-tooltip {
-    font-size: 11px;
+    font-size: 12px;
     color: #666666;
     font-family: Inter, sans-serif;
     margin-left: 4px;
