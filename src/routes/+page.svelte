@@ -37,7 +37,7 @@
   let zoomLevel = $state(100);
   let fileInfoLoading = $state(false);
 
-  // constants
+  // constnts
   const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'];
   const videoExts = ['mp4', 'webm', 'mkv', 'avi', 'mov', 'wmv'];
   const allExts = [...imageExts, ...videoExts];
@@ -183,19 +183,19 @@
       const info = await stat(path);
       fileSize = formatFileSize(info.size);
     } catch {}
-    
-    fileInfoLoading = false;
   }
 
   function onImageLoad(e: Event) {
     const img = e.target as HTMLImageElement;
     fileDimensions = `${img.naturalWidth} × ${img.naturalHeight}`;
+    fileInfoLoading = false;
   }
 
   function onVideoLoad() {
     if (!videoEl) return;
     fileDimensions = `${videoEl.videoWidth} × ${videoEl.videoHeight}`;
     videoEl.volume = volume;
+    fileInfoLoading = false;
   }
 
   async function loadFile(path: string) {
@@ -299,7 +299,7 @@
     if (selected) loadFile(selected as string);
   }
 
-  // onMount — always last
+  // onMount
   onMount(() => {
     const initial = (window as any).__INITIAL_FILE__;
     if (initial) loadFile(initial);
