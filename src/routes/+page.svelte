@@ -5,7 +5,6 @@
   import { readDir, stat } from '@tauri-apps/plugin-fs';
   import { open } from '@tauri-apps/plugin-dialog';
 
-  // file state
   let filePath = $state('');
   let fileSrc = $state('');
   let fileName = $state('no file open');
@@ -16,7 +15,6 @@
   let fileDimensions = $state('');
   let fileInfoLoading = $state(false);
 
-  // video state
   let videoEl = $state<HTMLVideoElement | null>(null);
   let playing = $state(false);
   let muted = $state(false);
@@ -24,24 +22,22 @@
   let currentTime = $state('0:00');
   let duration = $state('0:00');
 
-  // volume state
   let volume = $state(1);
   let volumeHovered = $state(false);
   const VOLUME_SEGMENTS = 8;
 
-  // ui state
   let hoverZone = $state('none');
   let isFullscreen = $state(false);
   let fsControlsVisible = $state(true);
   let fsHideTimer: ReturnType<typeof setTimeout> | null = null;
   let zoomLevel = $state(100);
+  let translateX = $state(0);
+  let translateY = $state(0);
 
-  // constants
   const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'];
   const videoExts = ['mp4', 'webm', 'mkv', 'avi', 'mov', 'wmv'];
   const allExts = [...imageExts, ...videoExts];
 
-  // helpers
   function formatTime(seconds: number): string {
     if (!seconds || isNaN(seconds)) return '0:00';
     const m = Math.floor(seconds / 60);
@@ -55,7 +51,6 @@
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   }
 
-  // video controls
   function updateProgress() {
     if (!videoEl) return;
     progress = (videoEl.currentTime / videoEl.duration) * 100;
@@ -112,7 +107,6 @@
     window.addEventListener('mouseup', onMouseUp);
   }
 
-  // volume controls
   function setVolume(val: number) {
     volume = Math.max(0, Math.min(1, val));
     if (videoEl) {
@@ -165,7 +159,6 @@
     }
   }
 
-  // file functions
   async function displayFile(path: string) {
     filePath = path;
     fileName = path.split('\\').pop() || path.split('/').pop() || path;
@@ -174,10 +167,6 @@
     fileSrc = convertFileSrc(path);
     fileSize = '';
     fileDimensions = '';
-    progress = 0;
-    currentTime = '0:00';
-    duration = '0:00';
-    playing = false;
     fileInfoLoading = true;
     fileInfoLoading = true;
 
@@ -198,6 +187,10 @@
     fileDimensions = `${videoEl.videoWidth} × ${videoEl.videoHeight}`;
     videoEl.volume = volume;
     fileInfoLoading = false;
+    progress = 0;
+    currentTime = '0:00';
+    duration = formatTime(videoEl.duration);
+    playing = !videoEl.paused;
   }
 
   async function loadFile(path: string) {
@@ -240,7 +233,6 @@
     fileDimensions = '';
   }
 
-  // window controls
   async function minimizeWindow() {
     await getCurrentWindow().minimize();
   }
@@ -268,6 +260,29 @@
 
   function resetZoom() {
     zoomLevel = 100;
+    translateX = 0;
+    translateY = 0;
+  }
+
+  function handleViewerScroll(e: WheelEvent) {
+    if (!fileSrc || isVideo) return;
+    e.preventDefault();
+
+    const viewer = (e.currentTarget as HTMLElement);
+    const rect = viewer.getBoundingClientRect();
+
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+
+    const oldScale = zoomLevel / 100;
+    const delta = e.deltaY > 0 ? -10 : 10;
+    const newZoom = Math.max(10, Math.min(1000, zoomLevel + delta));
+    const newScale = newZoom / 100;
+
+    translateX = mouseX - (mouseX - translateX) * (newScale / oldScale);
+    translateY = mouseY - (mouseY - translateY) * (newScale / oldScale);
+
+    zoomLevel = newZoom;
   }
 
   async function startDrag(e: MouseEvent) {
@@ -275,7 +290,6 @@
     await getCurrentWindow().startDragging();
   }
 
-  // keyboard handler
   function handleKeydown(e: KeyboardEvent) {
     if (e.key === 'f' || e.key === 'F') toggleFullscreen();
     if (e.key === 'Escape' && isFullscreen) toggleFullscreen();
@@ -299,7 +313,6 @@
     }
   }
 
-  // file dialog
   async function openFileDialog() {
     const selected = await open({
       multiple: false,
@@ -311,7 +324,6 @@
     if (selected) loadFile(selected as string);
   }
 
-  // mount
   onMount(() => {
     const initial = (window as any).__INITIAL_FILE__;
     if (initial) loadFile(initial);
@@ -370,9 +382,15 @@
     <div class="viewer"
       onmouseenter={() => hoverZone = isVideo ? 'video' : 'sidebar'}
       onmouseleave={() => hoverZone = 'none'}
+      onwheel={handleViewerScroll}
       role="presentation">
       {#if fileSrc && !isVideo}
-        <img src={fileSrc} alt={fileName} onload={onImageLoad} />
+        <img
+          src={fileSrc}
+          alt={fileName}
+          onload={onImageLoad}
+          style="transform: scale({zoomLevel / 100}) translate({translateX / (zoomLevel / 100)}px, {translateY / (zoomLevel / 100)}px); transform-origin: 0 0;"
+        />
       {:else if fileSrc && isVideo}
         <div class="video-wrapper"
           role="presentation"
