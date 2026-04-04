@@ -365,6 +365,7 @@
             autoplay
             ontimeupdate={updateProgress}
             onloadedmetadata={onVideoLoad}
+            onclick={togglePlay}
           >
             <track kind="captions" />
           </video>
@@ -383,13 +384,13 @@
             <div class="controls-row">
               <button class="ctrl-btn" onclick={togglePlay} aria-label="play/pause">
                 {#if playing}
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <svg width="20" height="20" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <rect x="3" y="2" width="3.5" height="12" rx="1" fill="currentColor"/>
                     <rect x="9.5" y="2" width="3.5" height="12" rx="1" fill="currentColor"/>
                   </svg>
                 {:else}
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M4 2.5L13 8L4 13.5V2.5Z" fill="currentColor"/>
+                  <svg width="20" height="20" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M3 2L14 8L3 14V2Z" fill="currentColor"/>
                   </svg>
                 {/if}
               </button>
@@ -509,30 +510,30 @@
           <div class="fs-controls-row">
             <button class="fs-ctrl-btn" onclick={togglePlay} aria-label="play/pause">
               {#if playing}
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <rect x="3" y="2" width="3.5" height="12" rx="1" fill="currentColor"/>
-                  <rect x="9.5" y="2" width="3.5" height="12" rx="1" fill="currentColor"/>
-                </svg>
-              {:else}
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M4 2.5L13 8L4 13.5V2.5Z" fill="currentColor"/>
-                </svg>
-              {/if}
+                  <svg width="20" height="20" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="3" y="2" width="3.5" height="12" rx="1" fill="currentColor"/>
+                    <rect x="9.5" y="2" width="3.5" height="12" rx="1" fill="currentColor"/>
+                  </svg>
+                {:else}
+                  <svg width="20" height="20" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M3 2L14 8L3 14V2Z" fill="currentColor"/>
+                  </svg>
+                {/if}
             </button>
-            <button class="fs-ctrl-btn" onclick={toggleMute} aria-label="mute">
+            <button class="fs-ctrl-btn volume-btn" onclick={toggleMute} aria-label="mute">
               {#if muted || volume === 0}
-                <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <svg width="24" height="24" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M9 4L5 7H2V11H5L9 14V4Z" fill="currentColor"/>
                   <line x1="12" y1="6" x2="16" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
                   <line x1="16" y1="6" x2="12" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
                 </svg>
               {:else if volume < 0.5}
-                <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <svg width="24" height="24" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M9 4L5 7H2V11H5L9 14V4Z" fill="currentColor"/>
                   <path d="M11.5 7C12.5 7.8 13 8.4 13 9C13 9.6 12.5 10.2 11.5 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
                 </svg>
               {:else}
-                <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <svg width="24" height="24" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M9 4L5 7H2V11H5L9 14V4Z" fill="currentColor"/>
                   <path d="M11.5 7C12.5 7.8 13 8.4 13 9C13 9.6 12.5 10.2 11.5 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
                   <path d="M13.5 5C15.5 6.5 16.5 7.7 16.5 9C16.5 10.3 15.5 11.5 13.5 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
@@ -910,7 +911,7 @@
   .controls-row {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 2px;
   }
 
   .ctrl-btn {
@@ -918,7 +919,6 @@
     border: none;
     color: #cccccc;
     cursor: pointer;
-    font-size: 16px;
     padding: 2px 4px;
     font-family: Inter, sans-serif;
     display: flex;
@@ -932,6 +932,17 @@
     color: #ffffff;
   }
 
+  .ctrl-btn svg {
+    width: 28px;
+    height: 28px;
+  }
+
+  .volume-btn svg {
+    width: 28px;
+    height: 28px;
+  }
+
+  /* time */
   .time-display {
     font-size: 16px;
     color: #cccccc;
@@ -944,13 +955,16 @@
     position: relative;
     display: flex;
     align-items: center;
-    gap: 2px;
+    gap: 4px;
+    height: 28px;
   }
 
   .volume-btn {
     display: flex;
     align-items: center;
     justify-content: center;
+    height: 32px;
+    width: 32px;
   }
 
   .volume-diamonds {
@@ -1134,7 +1148,7 @@
   .fs-controls-row {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 2px;
   }
 
   .fs-ctrl-btn {
@@ -1154,8 +1168,18 @@
     color: #ffffff;
   }
 
+  .fs-ctrl-btn svg {
+    width: 26px;
+    height: 26px;
+  }
+
+  .fs-ctrl-btn.volume-btn svg {
+    width: 32px;
+    height: 32px;
+  }
+
   .fs-time {
-    font-size: 12px;
+    font-size: 14px;
     color: #888888;
     font-family: Inter, sans-serif;
   }
