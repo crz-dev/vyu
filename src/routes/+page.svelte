@@ -33,6 +33,8 @@
   let zoomLevel = $state(100);
   let translateX = $state(0);
   let translateY = $state(0);
+  let isDragging = $state(false);
+  let dragStart = $state({ x: 0, y: 0, tx: 0, ty: 0 });
 
   const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'];
   const videoExts = ['mp4', 'webm', 'mkv', 'avi', 'mov', 'wmv'];
@@ -168,7 +170,6 @@
     fileSize = '';
     fileDimensions = '';
     fileInfoLoading = true;
-    fileInfoLoading = true;
 
     try {
       const info = await stat(path);
@@ -265,24 +266,60 @@
   }
 
   function handleViewerScroll(e: WheelEvent) {
-    if (!fileSrc || isVideo) return;
-    e.preventDefault();
+  if (!fileSrc) return;
+  e.preventDefault();
 
-    const viewer = (e.currentTarget as HTMLElement);
-    const rect = viewer.getBoundingClientRect();
+  const viewer = (e.currentTarget as HTMLElement);
+  const rect = viewer.getBoundingClientRect();
 
-    const mouseX = e.clientX - rect.left;
-    const mouseY = e.clientY - rect.top;
+  const mouseX = e.clientX - rect.left;
+  const mouseY = e.clientY - rect.top;
 
-    const oldScale = zoomLevel / 100;
-    const delta = e.deltaY > 0 ? -10 : 10;
-    const newZoom = Math.max(10, Math.min(1000, zoomLevel + delta));
-    const newScale = newZoom / 100;
+  const oldScale = zoomLevel / 100;
+  const factor = e.deltaY > 0 ? 1 / 1.1 : 1.1;
+  const raw = zoomLevel * factor;
+  const newZoom = Math.max(100, Math.min(1000,
+    zoomLevel > 100 && raw < 100 ? 100 : raw
+  ));
+  const newScale = newZoom / 100;
 
+  if (newZoom === 100) {
+    translateX = 0;
+    translateY = 0;
+  } else {
     translateX = mouseX - (mouseX - translateX) * (newScale / oldScale);
     translateY = mouseY - (mouseY - translateY) * (newScale / oldScale);
+  }
 
-    zoomLevel = newZoom;
+  zoomLevel = newZoom;
+}
+
+  function startPan(e: MouseEvent) {
+    e.preventDefault();
+    let hasMoved = false;
+    isDragging = true;
+    dragStart = { x: e.clientX, y: e.clientY, tx: translateX, ty: translateY };
+
+    function onMove(e: MouseEvent) {
+      const dx = e.clientX - dragStart.x;
+      const dy = e.clientY - dragStart.y;
+      if (!hasMoved && Math.sqrt(dx * dx + dy * dy) < 8) return;
+      hasMoved = true;
+      if (zoomLevel > 100) {
+        translateX = dragStart.tx + dx;
+        translateY = dragStart.ty + dy;
+      }
+    }
+
+    function onUp() {
+      isDragging = false;
+      if (!hasMoved && isVideo) togglePlay();
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    }
+
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
   }
 
   async function startDrag(e: MouseEvent) {
@@ -383,6 +420,8 @@
       onmouseenter={() => hoverZone = isVideo ? 'video' : 'sidebar'}
       onmouseleave={() => hoverZone = 'none'}
       onwheel={handleViewerScroll}
+      onmousedown={!isVideo ? startPan : undefined}
+      style="cursor: {!isVideo && zoomLevel > 100 ? (isDragging ? 'grabbing' : 'grab') : 'default'}"
       role="presentation">
       {#if fileSrc && !isVideo}
         <img
@@ -395,7 +434,9 @@
         <div class="video-wrapper"
           role="presentation"
           onmouseenter={() => hoverZone = 'video'}
-          onmouseleave={() => hoverZone = 'none'}>
+          onmouseleave={() => hoverZone = 'none'}
+          onmousedown={zoomLevel > 100 ? startPan : undefined}
+          style="transform: scale({zoomLevel / 100}) translate({translateX / (zoomLevel / 100)}px, {translateY / (zoomLevel / 100)}px); transform-origin: 0 0; cursor: {zoomLevel > 100 ? (isDragging ? 'grabbing' : 'grab') : 'default'}">
           <video
             bind:this={videoEl}
             src={fileSrc}
@@ -512,7 +553,7 @@
     </span>
     <!-- zoom + fullscreen -->
     <div class="bottombar-right">
-      <span class="zoom" onclick={resetZoom} role="button" tabindex="0">{zoomLevel}%</span>
+      <span class="zoom" onclick={resetZoom} role="button" tabindex="0">{Math.round(zoomLevel)}%</span>
       <button class="fs-btn" onclick={toggleFullscreen} aria-label="toggle fullscreen">
         <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
           <path d="M1 4V1H4M8 1H11V4M11 8V11H8M4 11H1V8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
@@ -526,8 +567,11 @@
     <div class="fs-overlay" class:visible={fsControlsVisible}
       role="button"
       tabindex="0"
-      onclick={(e) => { if ((e.target as HTMLElement) === e.currentTarget) togglePlay(); }}
-      onkeydown={(e) => { if (e.key === ' ' || e.key === 'Enter') togglePlay(); }}>
+      onwheel={handleViewerScroll}
+      onmousedown={startPan}
+      onclick={undefined}
+      onkeydown={(e) => { if (e.key === ' ' || e.key === 'Enter') togglePlay(); }}
+      style="cursor: {zoomLevel > 100 ? (isDragging ? 'grabbing' : 'grab') : 'default'}">
 
       <!-- fs topbar -->
       <div class="fs-topbar">
@@ -1122,7 +1166,7 @@
   .fs-overlay {
     position: fixed;
     inset: 0;
-    pointer-events: none;
+    pointer-events: all;
     opacity: 0;
     transition: opacity 0.3s;
     z-index: 100;
