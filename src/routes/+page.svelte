@@ -1,31 +1,31 @@
 <script lang="ts">
-  import { onMount } from "svelte";
-  import { convertFileSrc } from "@tauri-apps/api/core";
-  import { getCurrentWindow } from "@tauri-apps/api/window";
-  import { readDir, stat } from "@tauri-apps/plugin-fs";
-  import { open } from "@tauri-apps/plugin-dialog";
+  import { onMount } from 'svelte';
+  import { convertFileSrc } from '@tauri-apps/api/core';
+  import { getCurrentWindow } from '@tauri-apps/api/window';
+  import { readDir, stat } from '@tauri-apps/plugin-fs';
+  import { open } from '@tauri-apps/plugin-dialog';
 
-  let fileSrc = $state("");
-  let fileName = $state("no file open");
+  let fileSrc = $state('');
+  let fileName = $state('no file open');
   let isVideo = $state(false);
   let fileList: string[] = $state([]);
   let currentIndex = $state(0);
-  let fileSize = $state("");
-  let fileDimensions = $state("");
+  let fileSize = $state('');
+  let fileDimensions = $state('');
   let fileInfoLoading = $state(false);
 
   let videoEl = $state<HTMLVideoElement | null>(null);
   let playing = $state(false);
   let muted = $state(false);
   let progress = $state(0);
-  let currentTime = $state("0:00");
-  let duration = $state("0:00");
+  let currentTime = $state('0:00');
+  let duration = $state('0:00');
 
   let volume = $state(1);
   let volumeHovered = $state(false);
   const VOLUME_SEGMENTS = 8;
 
-  let hoverZone = $state("none");
+  let hoverZone = $state('none');
   let isFullscreen = $state(false);
   let fsControlsVisible = $state(true);
   let lastPinchDist = 0;
@@ -37,25 +37,23 @@
   let isDragging = $state(false);
   let dragStart = $state({ x: 0, y: 0, tx: 0, ty: 0 });
 
-  const imageExts = ["jpg", "jpeg", "png", "gif", "webp", "bmp", "svg"];
-  const videoExts = ["mp4", "webm", "mkv", "avi", "mov", "wmv"];
+  const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'];
+  const videoExts = ['mp4', 'webm', 'mkv', 'avi', 'mov', 'wmv'];
   const allExts = [...imageExts, ...videoExts];
 
   const mediaTransform = $derived(
     `transform: scale(${zoomLevel / 100}) translate(${translateX / (zoomLevel / 100)}px, ${translateY / (zoomLevel / 100)}px); transform-origin: 0 0;`,
   );
 
-  const panCursor = $derived(
-    zoomLevel > 100 ? (isDragging ? "grabbing" : "grab") : "default",
-  );
+  const panCursor = $derived(zoomLevel > 100 ? (isDragging ? 'grabbing' : 'grab') : 'default');
 
-  const fsCursor = $derived(!fsControlsVisible ? "none" : panCursor);
+  const fsCursor = $derived(!fsControlsVisible ? 'none' : panCursor);
 
   function formatTime(seconds: number): string {
-    if (!seconds || isNaN(seconds)) return "0:00";
+    if (!seconds || isNaN(seconds)) return '0:00';
     const m = Math.floor(seconds / 60);
     const s = Math.floor(seconds % 60);
-    return `${m}:${s.toString().padStart(2, "0")}`;
+    return `${m}:${s.toString().padStart(2, '0')}`;
   }
 
   function formatFileSize(bytes: number): string {
@@ -94,10 +92,7 @@
 
     function scrubTo(clientX: number) {
       const rect = bar.getBoundingClientRect();
-      const ratio = Math.max(
-        0,
-        Math.min(1, (clientX - rect.left) / rect.width),
-      );
+      const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
       videoEl!.currentTime = ratio * videoEl!.duration;
       progress = ratio * 100;
       currentTime = formatTime(videoEl!.currentTime);
@@ -114,13 +109,13 @@
     }
 
     function onMouseUp() {
-      window.removeEventListener("mousemove", onMouseMove);
-      window.removeEventListener("mouseup", onMouseUp);
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
       if (wasPlaying) videoEl!.play();
     }
 
-    window.addEventListener("mousemove", onMouseMove);
-    window.addEventListener("mouseup", onMouseUp);
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
   }
 
   function setVolume(val: number) {
@@ -130,7 +125,7 @@
       muted = volume === 0;
       videoEl.muted = muted;
     }
-    localStorage.setItem("vyu-volume", String(volume));
+    localStorage.setItem('vyu-volume', String(volume));
   }
 
   function handleVolumeScroll(e: WheelEvent) {
@@ -141,15 +136,12 @@
   function startVolumeDrag(e: MouseEvent) {
     e.preventDefault();
     const bar = e.currentTarget as HTMLElement;
-    const diamonds = bar.querySelectorAll(".volume-diamond");
+    const diamonds = bar.querySelectorAll('.volume-diamond');
 
     function dragTo(clientX: number) {
       const first = diamonds[0].getBoundingClientRect();
       const last = diamonds[diamonds.length - 1].getBoundingClientRect();
-      const ratio = Math.max(
-        0,
-        Math.min(1, (clientX - first.left) / (last.right - first.left)),
-      );
+      const ratio = Math.max(0, Math.min(1, (clientX - first.left) / (last.right - first.left)));
       setVolume(Math.ceil(ratio * VOLUME_SEGMENTS) / VOLUME_SEGMENTS);
     }
 
@@ -159,21 +151,21 @@
       dragTo(e.clientX);
     }
     function onMouseUp() {
-      window.removeEventListener("mousemove", onMouseMove);
-      window.removeEventListener("mouseup", onMouseUp);
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
     }
 
-    window.addEventListener("mousemove", onMouseMove);
-    window.addEventListener("mouseup", onMouseUp);
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
   }
 
   async function displayFile(path: string) {
-    fileName = path.split("\\").pop() || path.split("/").pop() || path;
-    const ext = path.split(".").pop()?.toLowerCase() || "";
+    fileName = path.split('\\').pop() || path.split('/').pop() || path;
+    const ext = path.split('.').pop()?.toLowerCase() || '';
     isVideo = videoExts.includes(ext);
     fileSrc = convertFileSrc(path);
-    fileSize = "";
-    fileDimensions = "";
+    fileSize = '';
+    fileDimensions = '';
     fileInfoLoading = true;
     resetZoom();
 
@@ -195,48 +187,45 @@
     videoEl.volume = volume;
     fileInfoLoading = false;
     progress = 0;
-    currentTime = "0:00";
+    currentTime = '0:00';
     duration = formatTime(videoEl.duration);
     playing = !videoEl.paused;
   }
 
   async function loadFile(path: string) {
     await displayFile(path);
-    const sep = path.includes("\\") ? "\\" : "/";
+    const sep = path.includes('\\') ? '\\' : '/';
     const folder = path.substring(0, path.lastIndexOf(sep));
     try {
       const entries = await readDir(folder);
       fileList = entries
-        .filter((e) =>
-          allExts.includes(e.name?.split(".").pop()?.toLowerCase() ?? ""),
-        )
+        .filter((e) => allExts.includes(e.name?.split('.').pop()?.toLowerCase() ?? ''))
         .map((e) => `${folder}${sep}${e.name}`)
         .sort();
       currentIndex = fileList.indexOf(path);
     } catch (err) {
-      console.error("could not read folder:", err);
+      console.error('could not read folder:', err);
     }
   }
 
   function navigate(direction: number) {
     if (fileList.length === 0) return;
-    currentIndex =
-      (currentIndex + direction + fileList.length) % fileList.length;
+    currentIndex = (currentIndex + direction + fileList.length) % fileList.length;
     displayFile(fileList[currentIndex]);
   }
 
   function closeFile() {
-    fileSrc = "";
-    fileName = "no file open";
+    fileSrc = '';
+    fileName = 'no file open';
     isVideo = false;
     fileList = [];
     currentIndex = 0;
     playing = false;
     progress = 0;
-    currentTime = "0:00";
-    duration = "0:00";
-    fileSize = "";
-    fileDimensions = "";
+    currentTime = '0:00';
+    duration = '0:00';
+    fileSize = '';
+    fileDimensions = '';
     resetZoom();
   }
 
@@ -279,10 +268,7 @@
 
     const oldScale = zoomLevel / 100;
     const raw = zoomLevel * (e.deltaY > 0 ? 1 / 1.1 : 1.1);
-    const newZoom = Math.max(
-      100,
-      Math.min(1000, zoomLevel > 100 && raw < 100 ? 100 : raw),
-    );
+    const newZoom = Math.max(100, Math.min(1000, zoomLevel > 100 && raw < 100 ? 100 : raw));
     const newScale = newZoom / 100;
 
     if (newZoom === 100) {
@@ -337,7 +323,12 @@
   }
 
   function startPan(e: MouseEvent) {
-    if ((e.target as HTMLElement).closest('.video-controls, .fs-controls, .fs-topbar, .fs-nav-left, .fs-nav-right')) return;
+    if (
+      (e.target as HTMLElement).closest(
+        '.video-controls, .fs-controls, .fs-topbar, .fs-nav-left, .fs-nav-right',
+      )
+    )
+      return;
     e.preventDefault();
     let hasMoved = false;
     isDragging = true;
@@ -357,61 +348,57 @@
     function onUp() {
       isDragging = false;
       if (!hasMoved && isVideo) togglePlay();
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
     }
 
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
   }
 
   async function startDrag(e: MouseEvent) {
-    if ((e.target as HTMLElement).closest("button")) return;
+    if ((e.target as HTMLElement).closest('button')) return;
     await getCurrentWindow().startDragging();
   }
 
   function handleKeydown(e: KeyboardEvent) {
-    if (e.key === "f" || e.key === "F") {
+    if (e.key === 'f' || e.key === 'F') {
       toggleFullscreen();
       return;
     }
-    if (e.key === "Escape" && isFullscreen) {
+    if (e.key === 'Escape' && isFullscreen) {
       toggleFullscreen();
       return;
     }
-    if (e.key === "ArrowUp") {
+    if (e.key === 'ArrowUp') {
       e.preventDefault();
       setVolume(volume + 0.125);
       return;
     }
-    if (e.key === "ArrowDown") {
+    if (e.key === 'ArrowDown') {
       e.preventDefault();
       setVolume(volume - 0.125);
       return;
     }
 
-    if (["ArrowRight", "ArrowLeft", " "].includes(e.key)) e.preventDefault();
+    if (['ArrowRight', 'ArrowLeft', ' '].includes(e.key)) e.preventDefault();
 
-    if (isVideo && videoEl && (hoverZone === "video" || isFullscreen)) {
-      if (e.key === " ") togglePlay();
-      if (e.key === "ArrowRight")
-        videoEl.currentTime = Math.min(
-          videoEl.currentTime + 5,
-          videoEl.duration,
-        );
-      if (e.key === "ArrowLeft")
-        videoEl.currentTime = Math.max(videoEl.currentTime - 5, 0);
+    if (isVideo && videoEl && (hoverZone === 'video' || isFullscreen)) {
+      if (e.key === ' ') togglePlay();
+      if (e.key === 'ArrowRight')
+        videoEl.currentTime = Math.min(videoEl.currentTime + 5, videoEl.duration);
+      if (e.key === 'ArrowLeft') videoEl.currentTime = Math.max(videoEl.currentTime - 5, 0);
     } else {
-      if (e.key === " " && isVideo && videoEl) togglePlay();
-      if (e.key === "ArrowRight") navigate(1);
-      if (e.key === "ArrowLeft") navigate(-1);
+      if (e.key === ' ' && isVideo && videoEl) togglePlay();
+      if (e.key === 'ArrowRight') navigate(1);
+      if (e.key === 'ArrowLeft') navigate(-1);
     }
   }
 
   async function openFileDialog() {
     const selected = await open({
       multiple: false,
-      filters: [{ name: "Media", extensions: [...imageExts, ...videoExts] }],
+      filters: [{ name: 'Media', extensions: [...imageExts, ...videoExts] }],
     });
     if (selected) loadFile(selected as string);
   }
@@ -420,16 +407,16 @@
     const initial = (window as any).__INITIAL_FILE__;
     if (initial) loadFile(initial);
 
-    const saved = localStorage.getItem("vyu-volume");
+    const saved = localStorage.getItem('vyu-volume');
     if (saved !== null) volume = parseFloat(saved);
 
     getCurrentWindow().onDragDropEvent((event) => {
-      if (event.payload.type === "drop" && event.payload.paths?.length > 0)
+      if (event.payload.type === 'drop' && event.payload.paths?.length > 0)
         loadFile(event.payload.paths[0]);
     });
 
-    window.addEventListener("keydown", handleKeydown);
-    return () => window.removeEventListener("keydown", handleKeydown);
+    window.addEventListener('keydown', handleKeydown);
+    return () => window.removeEventListener('keydown', handleKeydown);
   });
 </script>
 
@@ -445,71 +432,50 @@
     <span class="filename">{fileName}</span>
     {#if fileSrc}
       <span class="divider">/</span>
-      <button class="folder-btn" onclick={closeFile} aria-label="close file"
-        >⏏️</button
-      >
+      <button class="folder-btn" onclick={closeFile} aria-label="close file">⏏️</button>
       <span class="divider">/</span>
-      <button class="folder-btn" onclick={openFileDialog} aria-label="open file"
-        >📁</button
-      >
+      <button class="folder-btn" onclick={openFileDialog} aria-label="open file">📁</button>
     {/if}
     <div class="window-controls">
-      <button
-        class="wc-btn minimize"
-        onclick={minimizeWindow}
-        aria-label="minimize">−</button
-      >
-      <button
-        class="wc-btn maximize"
-        onclick={maximizeWindow}
-        aria-label="maximize">▢</button
-      >
-      <button class="wc-btn close" onclick={closeWindow} aria-label="close"
-        >✕</button
-      >
+      <button class="wc-btn minimize" onclick={minimizeWindow} aria-label="minimize">−</button>
+      <button class="wc-btn maximize" onclick={maximizeWindow} aria-label="maximize">▢</button>
+      <button class="wc-btn close" onclick={closeWindow} aria-label="close">✕</button>
     </div>
   </div>
 
   <div class="content">
     <div
       class="sidebar left"
-      onmouseenter={() => (hoverZone = "sidebar")}
-      onmouseleave={() => (hoverZone = "none")}
+      onmouseenter={() => (hoverZone = 'sidebar')}
+      onmouseleave={() => (hoverZone = 'none')}
       role="presentation"
     >
-      <button
-        class="nav-btn"
-        onclick={() => navigate(-1)}
-        aria-label="previous file">‹</button
-      >
+      <button class="nav-btn" onclick={() => navigate(-1)} aria-label="previous file">‹</button>
     </div>
 
     <div
       class="viewer"
-      onmouseenter={() => (hoverZone = isVideo ? "video" : "sidebar")}
-      onmouseleave={() => (hoverZone = "none")}
+      onmouseenter={() => (hoverZone = isVideo ? 'video' : 'sidebar')}
+      onmouseleave={() => (hoverZone = 'none')}
       onwheel={handleViewerScroll}
       onmousedown={!isVideo ? startPan : undefined}
       ondblclick={!isVideo && fileSrc ? toggleFullscreen : undefined}
-      ontouchstart={(e) => { if (e.touches.length === 2) e.preventDefault(); }}
+      ontouchstart={(e) => {
+        if (e.touches.length === 2) e.preventDefault();
+      }}
       ontouchmove={handleTouchZoom}
       ontouchend={handleTouchEnd}
       style="cursor: {!isVideo ? panCursor : 'default'}"
       role="presentation"
     >
       {#if fileSrc && !isVideo}
-        <img
-          src={fileSrc}
-          alt={fileName}
-          onload={onImageLoad}
-          style={mediaTransform}
-        />
+        <img src={fileSrc} alt={fileName} onload={onImageLoad} style={mediaTransform} />
       {:else if fileSrc && isVideo}
         <div
           class="video-wrapper"
           role="presentation"
-          onmouseenter={() => (hoverZone = "video")}
-          onmouseleave={() => (hoverZone = "none")}
+          onmouseenter={() => (hoverZone = 'video')}
+          onmouseleave={() => (hoverZone = 'none')}
           onmousedown={startPan}
           style="{mediaTransform} cursor: {panCursor}"
         >
@@ -537,11 +503,7 @@
               <div class="progress-diamond" style="left: {progress}%"></div>
             </div>
             <div class="controls-row">
-              <button
-                class="ctrl-btn"
-                onclick={togglePlay}
-                aria-label="play/pause"
-              >
+              <button class="ctrl-btn" onclick={togglePlay} aria-label="play/pause">
                 {#if playing}
                   <svg
                     width="20"
@@ -550,22 +512,8 @@
                     fill="none"
                     xmlns="http://www.w3.org/2000/svg"
                   >
-                    <rect
-                      x="3"
-                      y="2"
-                      width="3.5"
-                      height="12"
-                      rx="1"
-                      fill="currentColor"
-                    />
-                    <rect
-                      x="9.5"
-                      y="2"
-                      width="3.5"
-                      height="12"
-                      rx="1"
-                      fill="currentColor"
-                    />
+                    <rect x="3" y="2" width="3.5" height="12" rx="1" fill="currentColor" />
+                    <rect x="9.5" y="2" width="3.5" height="12" rx="1" fill="currentColor" />
                   </svg>
                 {:else}
                   <svg
@@ -586,11 +534,7 @@
                 onwheel={handleVolumeScroll}
                 role="presentation"
               >
-                <button
-                  class="ctrl-btn volume-btn"
-                  onclick={toggleMute}
-                  aria-label="toggle mute"
-                >
+                <button class="ctrl-btn volume-btn" onclick={toggleMute} aria-label="toggle mute">
                   {#if muted || volume === 0}
                     <svg
                       width="18"
@@ -660,26 +604,18 @@
                   {/if}
                 </button>
                 {#if volumeHovered}
-                  <div
-                    class="volume-diamonds"
-                    onmousedown={startVolumeDrag}
-                    role="presentation"
-                  >
+                  <div class="volume-diamonds" onmousedown={startVolumeDrag} role="presentation">
                     {#each Array(VOLUME_SEGMENTS) as _, i}
                       <button
                         class="volume-diamond"
                         class:filled={i < Math.round(volume * VOLUME_SEGMENTS)}
                         style="--i: {i}"
                         onclick={() => setVolume((i + 1) / VOLUME_SEGMENTS)}
-                        aria-label="set volume {Math.round(
-                          ((i + 1) / VOLUME_SEGMENTS) * 100,
-                        )}%"
+                        aria-label="set volume {Math.round(((i + 1) / VOLUME_SEGMENTS) * 100)}%"
                       >
                       </button>
                     {/each}
-                    <span class="volume-tooltip"
-                      >{muted ? "0" : Math.round(volume * 100)}%</span
-                    >
+                    <span class="volume-tooltip">{muted ? '0' : Math.round(volume * 100)}%</span>
                   </div>
                 {/if}
               </div>
@@ -697,26 +633,22 @@
 
     <div
       class="sidebar right"
-      onmouseenter={() => (hoverZone = "sidebar")}
-      onmouseleave={() => (hoverZone = "none")}
+      onmouseenter={() => (hoverZone = 'sidebar')}
+      onmouseleave={() => (hoverZone = 'none')}
       role="presentation"
     >
-      <button class="nav-btn" onclick={() => navigate(1)} aria-label="next file"
-        >›</button
-      >
+      <button class="nav-btn" onclick={() => navigate(1)} aria-label="next file">›</button>
     </div>
   </div>
 
   <div class="bottombar">
     <span class="file-count"
-      >{fileList.length > 0
-        ? `${currentIndex + 1} / ${fileList.length}`
-        : "—"}</span
+      >{fileList.length > 0 ? `${currentIndex + 1} / ${fileList.length}` : '—'}</span
     >
     <span class="file-info">
       {#if fileDimensions && fileSize}
         {fileDimensions} · {fileSize}
-      {:else if !fileInfoLoading && fileName !== "no file open"}
+      {:else if !fileInfoLoading && fileName !== 'no file open'}
         {fileName}
       {:else if !fileSrc}
         no file open
@@ -726,11 +658,7 @@
       <span class="zoom" onclick={resetZoom} role="button" tabindex="0"
         >{Math.round(zoomLevel)}%</span
       >
-      <button
-        class="fs-btn"
-        onclick={toggleFullscreen}
-        aria-label="toggle fullscreen"
-      >
+      <button class="fs-btn" onclick={toggleFullscreen} aria-label="toggle fullscreen">
         <svg
           width="12"
           height="12"
@@ -757,7 +685,9 @@
       tabindex="0"
       onwheel={handleViewerScroll}
       onmousedown={startPan}
-      ontouchstart={(e) => { if (e.touches.length === 2) e.preventDefault(); }}
+      ontouchstart={(e) => {
+        if (e.touches.length === 2) e.preventDefault();
+      }}
       ontouchmove={handleTouchZoom}
       ontouchend={handleTouchEnd}
       style="cursor: {fsCursor}"
@@ -765,37 +695,18 @@
       <div class="fs-topbar">
         <span class="fs-filename">{fileName}</span>
         <div class="fs-window-controls">
-          <button
-            class="fs-wc-btn"
-            onclick={minimizeWindow}
-            aria-label="minimize">−</button
-          >
-          <button
-            class="fs-wc-btn"
-            onclick={maximizeWindow}
-            aria-label="maximize">▢</button
-          >
-          <button
-            class="fs-wc-btn close"
-            onclick={closeWindow}
-            aria-label="close">✕</button
-          >
+          <button class="fs-wc-btn" onclick={minimizeWindow} aria-label="minimize">−</button>
+          <button class="fs-wc-btn" onclick={maximizeWindow} aria-label="maximize">▢</button>
+          <button class="fs-wc-btn close" onclick={closeWindow} aria-label="close">✕</button>
         </div>
       </div>
 
       <div class="fs-nav-left">
-        <button
-          class="fs-nav-btn"
-          onclick={() => navigate(-1)}
-          aria-label="previous file">‹</button
+        <button class="fs-nav-btn" onclick={() => navigate(-1)} aria-label="previous file">‹</button
         >
       </div>
       <div class="fs-nav-right">
-        <button
-          class="fs-nav-btn"
-          onclick={() => navigate(1)}
-          aria-label="next file">›</button
-        >
+        <button class="fs-nav-btn" onclick={() => navigate(1)} aria-label="next file">›</button>
       </div>
 
       {#if isVideo && videoEl}
@@ -814,11 +725,7 @@
             <div class="fs-progress-diamond" style="left: {progress}%"></div>
           </div>
           <div class="fs-controls-row">
-            <button
-              class="fs-ctrl-btn"
-              onclick={togglePlay}
-              aria-label="play/pause"
-            >
+            <button class="fs-ctrl-btn" onclick={togglePlay} aria-label="play/pause">
               {#if playing}
                 <svg
                   width="20"
@@ -827,22 +734,8 @@
                   fill="none"
                   xmlns="http://www.w3.org/2000/svg"
                 >
-                  <rect
-                    x="3"
-                    y="2"
-                    width="3.5"
-                    height="12"
-                    rx="1"
-                    fill="currentColor"
-                  />
-                  <rect
-                    x="9.5"
-                    y="2"
-                    width="3.5"
-                    height="12"
-                    rx="1"
-                    fill="currentColor"
-                  />
+                  <rect x="3" y="2" width="3.5" height="12" rx="1" fill="currentColor" />
+                  <rect x="9.5" y="2" width="3.5" height="12" rx="1" fill="currentColor" />
                 </svg>
               {:else}
                 <svg
@@ -863,11 +756,7 @@
               onwheel={handleVolumeScroll}
               role="presentation"
             >
-              <button
-                class="fs-ctrl-btn volume-btn"
-                onclick={toggleMute}
-                aria-label="mute"
-              >
+              <button class="fs-ctrl-btn volume-btn" onclick={toggleMute} aria-label="mute">
                 {#if muted || volume === 0}
                   <svg
                     width="24"
@@ -937,36 +826,24 @@
                 {/if}
               </button>
               {#if volumeHovered}
-                <div
-                  class="volume-diamonds"
-                  onmousedown={startVolumeDrag}
-                  role="presentation"
-                >
+                <div class="volume-diamonds" onmousedown={startVolumeDrag} role="presentation">
                   {#each Array(VOLUME_SEGMENTS) as _, i}
                     <button
                       class="volume-diamond"
                       class:filled={i < Math.round(volume * VOLUME_SEGMENTS)}
                       style="--i: {i}"
                       onclick={() => setVolume((i + 1) / VOLUME_SEGMENTS)}
-                      aria-label="set volume {Math.round(
-                        ((i + 1) / VOLUME_SEGMENTS) * 100,
-                      )}%"
+                      aria-label="set volume {Math.round(((i + 1) / VOLUME_SEGMENTS) * 100)}%"
                     >
                     </button>
                   {/each}
-                  <span class="volume-tooltip"
-                    >{muted ? "0" : Math.round(volume * 100)}%</span
-                  >
+                  <span class="volume-tooltip">{muted ? '0' : Math.round(volume * 100)}%</span>
                 </div>
               {/if}
             </div>
             <span class="fs-time">{currentTime} / {duration}</span>
             <div class="fs-right">
-              <button
-                class="fs-ctrl-btn"
-                onclick={toggleFullscreen}
-                aria-label="exit fullscreen"
-              >
+              <button class="fs-ctrl-btn" onclick={toggleFullscreen} aria-label="exit fullscreen">
                 <svg
                   width="12"
                   height="12"
@@ -989,16 +866,10 @@
         <div class="fs-controls image-only">
           <div class="fs-controls-row">
             <span class="fs-time"
-              >{fileList.length > 0
-                ? `${currentIndex + 1} / ${fileList.length}`
-                : ""}</span
+              >{fileList.length > 0 ? `${currentIndex + 1} / ${fileList.length}` : ''}</span
             >
             <div class="fs-right">
-              <button
-                class="fs-ctrl-btn"
-                onclick={toggleFullscreen}
-                aria-label="exit fullscreen"
-              >
+              <button class="fs-ctrl-btn" onclick={toggleFullscreen} aria-label="exit fullscreen">
                 <svg
                   width="12"
                   height="12"
