@@ -5,17 +5,16 @@
   import { readDir, stat } from '@tauri-apps/plugin-fs';
   import { open } from '@tauri-apps/plugin-dialog';
 
-  // state variables
+  // file state
   let filePath = $state('');
   let fileSrc = $state('');
   let fileName = $state('no file open');
   let isVideo = $state(false);
   let fileList: string[] = $state([]);
   let currentIndex = $state(0);
-
-  // file info state
   let fileSize = $state('');
   let fileDimensions = $state('');
+  let fileInfoLoading = $state(false);
 
   // video state
   let videoEl = $state<HTMLVideoElement | null>(null);
@@ -24,7 +23,6 @@
   let progress = $state(0);
   let currentTime = $state('0:00');
   let duration = $state('0:00');
-  let showControls = $state(false);
 
   // volume state
   let volume = $state(1);
@@ -34,15 +32,16 @@
   // ui state
   let hoverZone = $state('none');
   let isFullscreen = $state(false);
+  let fsControlsVisible = $state(true);
+  let fsHideTimer: ReturnType<typeof setTimeout> | null = null;
   let zoomLevel = $state(100);
-  let fileInfoLoading = $state(false);
 
-  // constnts
+  // constants
   const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'];
   const videoExts = ['mp4', 'webm', 'mkv', 'avi', 'mov', 'wmv'];
   const allExts = [...imageExts, ...videoExts];
 
-  // helper functions
+  // helpers
   function formatTime(seconds: number): string {
     if (!seconds || isNaN(seconds)) return '0:00';
     const m = Math.floor(seconds / 60);
@@ -56,7 +55,7 @@
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   }
 
-  // video functions
+  // video controls
   function updateProgress() {
     if (!videoEl) return;
     progress = (videoEl.currentTime / videoEl.duration) * 100;
@@ -75,61 +74,6 @@
     if (!videoEl) return;
     muted = !muted;
     videoEl.muted = muted;
-  }
-
-  function setVolume(val: number) {
-    volume = Math.max(0, Math.min(1, val));
-    if (videoEl) {
-      videoEl.volume = volume;
-      muted = volume === 0;
-      videoEl.muted = muted;
-    }
-    saveVolume();
-  }
-
-  function handleVolumeScroll(e: WheelEvent) {
-    e.preventDefault();
-    const delta = e.deltaY > 0 ? -0.125 : 0.125;
-    setVolume(volume + delta);
-  }
-
-  function startVolumeDrag(e: MouseEvent) {
-    e.preventDefault();
-    const bar = e.currentTarget as HTMLElement;
-    const diamonds = bar.querySelectorAll('.volume-diamond');
-
-    function dragTo(clientX: number) {
-      const first = diamonds[0].getBoundingClientRect();
-      const last = diamonds[diamonds.length - 1].getBoundingClientRect();
-      const start = first.left;
-      const end = last.right;
-      const ratio = Math.max(0, Math.min(1, (clientX - start) / (end - start)));
-      const segment = Math.ceil(ratio * VOLUME_SEGMENTS);
-      setVolume(segment / VOLUME_SEGMENTS);
-    }
-
-    dragTo(e.clientX);
-
-    function onMouseMove(e: MouseEvent) { dragTo(e.clientX); }
-    function onMouseUp() {
-      window.removeEventListener('mousemove', onMouseMove);
-      window.removeEventListener('mouseup', onMouseUp);
-    }
-
-    window.addEventListener('mousemove', onMouseMove);
-    window.addEventListener('mouseup', onMouseUp);
-  }
-
-  function saveVolume() {
-    localStorage.setItem('vyu-volume', String(volume));
-  }
-
-  function loadVolume() {
-    const saved = localStorage.getItem('vyu-volume');
-    if (saved !== null) {
-      volume = parseFloat(saved);
-      if (videoEl) videoEl.volume = volume;
-    }
   }
 
   function startScrubbing(e: MouseEvent) {
@@ -168,6 +112,59 @@
     window.addEventListener('mouseup', onMouseUp);
   }
 
+  // volume controls
+  function setVolume(val: number) {
+    volume = Math.max(0, Math.min(1, val));
+    if (videoEl) {
+      videoEl.volume = volume;
+      muted = volume === 0;
+      videoEl.muted = muted;
+    }
+    saveVolume();
+  }
+
+  function handleVolumeScroll(e: WheelEvent) {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? -0.125 : 0.125;
+    setVolume(volume + delta);
+  }
+
+  function startVolumeDrag(e: MouseEvent) {
+    e.preventDefault();
+    const bar = e.currentTarget as HTMLElement;
+    const diamonds = bar.querySelectorAll('.volume-diamond');
+
+    function dragTo(clientX: number) {
+      const first = diamonds[0].getBoundingClientRect();
+      const last = diamonds[diamonds.length - 1].getBoundingClientRect();
+      const ratio = Math.max(0, Math.min(1, (clientX - first.left) / (last.right - first.left)));
+      setVolume(Math.ceil(ratio * VOLUME_SEGMENTS) / VOLUME_SEGMENTS);
+    }
+
+    dragTo(e.clientX);
+
+    function onMouseMove(e: MouseEvent) { dragTo(e.clientX); }
+    function onMouseUp() {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    }
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  }
+
+  function saveVolume() {
+    localStorage.setItem('vyu-volume', String(volume));
+  }
+
+  function loadVolume() {
+    const saved = localStorage.getItem('vyu-volume');
+    if (saved !== null) {
+      volume = parseFloat(saved);
+      if (videoEl) videoEl.volume = volume;
+    }
+  }
+
   // file functions
   async function displayFile(path: string) {
     filePath = path;
@@ -177,6 +174,11 @@
     fileSrc = convertFileSrc(path);
     fileSize = '';
     fileDimensions = '';
+    progress = 0;
+    currentTime = '0:00';
+    duration = '0:00';
+    playing = false;
+    fileInfoLoading = true;
     fileInfoLoading = true;
 
     try {
@@ -238,7 +240,7 @@
     fileDimensions = '';
   }
 
-  // window functions
+  // window controls
   async function minimizeWindow() {
     await getCurrentWindow().minimize();
   }
@@ -253,6 +255,15 @@
 
   function toggleFullscreen() {
     isFullscreen = !isFullscreen;
+    if (isFullscreen) resetFsTimer();
+  }
+
+  function resetFsTimer() {
+    fsControlsVisible = true;
+    if (fsHideTimer) clearTimeout(fsHideTimer);
+    fsHideTimer = setTimeout(() => {
+      fsControlsVisible = false;
+    }, 1500);
   }
 
   function resetZoom() {
@@ -264,7 +275,7 @@
     await getCurrentWindow().startDragging();
   }
 
-  // event handlers
+  // keyboard handler
   function handleKeydown(e: KeyboardEvent) {
     if (e.key === 'f' || e.key === 'F') toggleFullscreen();
     if (e.key === 'Escape' && isFullscreen) toggleFullscreen();
@@ -288,6 +299,7 @@
     }
   }
 
+  // file dialog
   async function openFileDialog() {
     const selected = await open({
       multiple: false,
@@ -299,7 +311,7 @@
     if (selected) loadFile(selected as string);
   }
 
-  // onMount
+  // mount
   onMount(() => {
     const initial = (window as any).__INITIAL_FILE__;
     if (initial) loadFile(initial);
@@ -309,7 +321,7 @@
     appWindow.onDragDropEvent((event) => {
       if (event.payload.type === 'drop') {
         const paths = event.payload.paths;
-        if (paths && paths.length > 0) loadFile(paths[0]);
+        if (paths?.length > 0) loadFile(paths[0]);
       }
     });
 
@@ -320,9 +332,11 @@
 
 <main
   class:fullscreen={isFullscreen}
+  onmousemove={isFullscreen ? resetFsTimer : undefined}
   ondrop={(e) => e.preventDefault()}
   ondragover={(e) => e.preventDefault()}>
 
+  <!-- topbar -->
   <div class="topbar" onmousedown={startDrag} role="toolbar" tabindex="-1">
     <span class="app-name">vyu</span>
     <span class="divider">/</span>
@@ -333,6 +347,7 @@
       <span class="divider">/</span>
       <button class="folder-btn" onclick={openFileDialog} aria-label="open file">📁</button>
     {/if}
+    <!-- window controls -->
     <div class="window-controls">
       <button class="wc-btn minimize" onclick={minimizeWindow} aria-label="minimize">−</button>
       <button class="wc-btn maximize" onclick={maximizeWindow} aria-label="maximize">▢</button>
@@ -340,7 +355,10 @@
     </div>
   </div>
 
+  <!-- main content -->
   <div class="content">
+
+    <!-- left nav -->
     <div class="sidebar left"
       onmouseenter={() => hoverZone = 'sidebar'}
       onmouseleave={() => hoverZone = 'none'}
@@ -348,6 +366,7 @@
       <button class="nav-btn" onclick={() => navigate(-1)} aria-label="previous file">‹</button>
     </div>
 
+    <!-- viewer -->
     <div class="viewer"
       onmouseenter={() => hoverZone = isVideo ? 'video' : 'sidebar'}
       onmouseleave={() => hoverZone = 'none'}
@@ -365,11 +384,12 @@
             autoplay
             ontimeupdate={updateProgress}
             onloadedmetadata={onVideoLoad}
-            onclick={togglePlay}
-          >
+            onclick={togglePlay}>
             <track kind="captions" />
           </video>
+          <!-- video controls overlay -->
           <div class="video-controls">
+            <!-- progress bar -->
             <div class="progress-bar"
               onmousedown={startScrubbing}
               role="slider"
@@ -382,6 +402,7 @@
               <div class="progress-diamond" style="left: {progress}%"></div>
             </div>
             <div class="controls-row">
+              <!-- play/pause -->
               <button class="ctrl-btn" onclick={togglePlay} aria-label="play/pause">
                 {#if playing}
                   <svg width="20" height="20" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -394,6 +415,7 @@
                   </svg>
                 {/if}
               </button>
+              <!-- volume -->
               <div class="volume-control"
                 onmouseenter={() => volumeHovered = true}
                 onmouseleave={() => volumeHovered = false}
@@ -419,6 +441,7 @@
                     </svg>
                   {/if}
                 </button>
+                <!-- volume diamonds -->
                 {#if volumeHovered}
                   <div class="volume-diamonds" onmousedown={startVolumeDrag} role="presentation">
                     {#each Array(VOLUME_SEGMENTS) as _, i}
@@ -434,11 +457,13 @@
                   </div>
                 {/if}
               </div>
+              <!-- time -->
               <span class="time-display">{currentTime} / {duration}</span>
             </div>
           </div>
         </div>
       {:else}
+        <!-- empty state -->
         <button class="empty" onclick={openFileDialog}>
           <span class="empty-icon">+</span>
           <span class="empty-text">open a file</span>
@@ -446,6 +471,7 @@
       {/if}
     </div>
 
+    <!-- right nav -->
     <div class="sidebar right"
       onmouseenter={() => hoverZone = 'sidebar'}
       onmouseleave={() => hoverZone = 'none'}
@@ -454,6 +480,7 @@
     </div>
   </div>
 
+  <!-- bottombar -->
   <div class="bottombar">
     <span class="file-count">{fileList.length > 0 ? `${currentIndex + 1} / ${fileList.length}` : '—'}</span>
     <span class="file-info">
@@ -465,6 +492,7 @@
         no file open
       {/if}
     </span>
+    <!-- zoom + fullscreen -->
     <div class="bottombar-right">
       <span class="zoom" onclick={resetZoom} role="button" tabindex="0">{zoomLevel}%</span>
       <button class="fs-btn" onclick={toggleFullscreen} aria-label="toggle fullscreen">
@@ -475,8 +503,15 @@
     </div>
   </div>
 
+  <!-- fullscreen overlay -->
   {#if isFullscreen}
-    <div class="fs-overlay">
+    <div class="fs-overlay" class:visible={fsControlsVisible}
+      role="button"
+      tabindex="0"
+      onclick={(e) => { if ((e.target as HTMLElement) === e.currentTarget) togglePlay(); }}
+      onkeydown={(e) => { if (e.key === ' ' || e.key === 'Enter') togglePlay(); }}>
+
+      <!-- fs topbar -->
       <div class="fs-topbar">
         <span class="fs-filename">{fileName}</span>
         <div class="fs-window-controls">
@@ -486,16 +521,18 @@
         </div>
       </div>
 
+      <!-- fs nav buttons -->
       <div class="fs-nav-left">
         <button class="fs-nav-btn" onclick={() => navigate(-1)} aria-label="previous file">‹</button>
       </div>
-
       <div class="fs-nav-right">
         <button class="fs-nav-btn" onclick={() => navigate(1)} aria-label="next file">›</button>
       </div>
 
+      <!-- fs video controls -->
       {#if isVideo && videoEl}
         <div class="fs-controls">
+          <!-- fs progress bar -->
           <div class="fs-progress"
             onmousedown={startScrubbing}
             role="slider"
@@ -508,39 +545,64 @@
             <div class="fs-progress-diamond" style="left: {progress}%"></div>
           </div>
           <div class="fs-controls-row">
+            <!-- fs play/pause -->
             <button class="fs-ctrl-btn" onclick={togglePlay} aria-label="play/pause">
               {#if playing}
-                  <svg width="20" height="20" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <rect x="3" y="2" width="3.5" height="12" rx="1" fill="currentColor"/>
-                    <rect x="9.5" y="2" width="3.5" height="12" rx="1" fill="currentColor"/>
-                  </svg>
-                {:else}
-                  <svg width="20" height="20" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M3 2L14 8L3 14V2Z" fill="currentColor"/>
-                  </svg>
-                {/if}
-            </button>
-            <button class="fs-ctrl-btn volume-btn" onclick={toggleMute} aria-label="mute">
-              {#if muted || volume === 0}
-                <svg width="24" height="24" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M9 4L5 7H2V11H5L9 14V4Z" fill="currentColor"/>
-                  <line x1="12" y1="6" x2="16" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                  <line x1="16" y1="6" x2="12" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                </svg>
-              {:else if volume < 0.5}
-                <svg width="24" height="24" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M9 4L5 7H2V11H5L9 14V4Z" fill="currentColor"/>
-                  <path d="M11.5 7C12.5 7.8 13 8.4 13 9C13 9.6 12.5 10.2 11.5 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                <svg width="20" height="20" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <rect x="3" y="2" width="3.5" height="12" rx="1" fill="currentColor"/>
+                  <rect x="9.5" y="2" width="3.5" height="12" rx="1" fill="currentColor"/>
                 </svg>
               {:else}
-                <svg width="24" height="24" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M9 4L5 7H2V11H5L9 14V4Z" fill="currentColor"/>
-                  <path d="M11.5 7C12.5 7.8 13 8.4 13 9C13 9.6 12.5 10.2 11.5 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                  <path d="M13.5 5C15.5 6.5 16.5 7.7 16.5 9C16.5 10.3 15.5 11.5 13.5 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                <svg width="20" height="20" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M3 2L14 8L3 14V2Z" fill="currentColor"/>
                 </svg>
               {/if}
             </button>
+            <!-- fs volume -->
+            <div class="volume-control"
+              onmouseenter={() => volumeHovered = true}
+              onmouseleave={() => volumeHovered = false}
+              onwheel={handleVolumeScroll}
+              role="presentation">
+              <button class="fs-ctrl-btn volume-btn" onclick={toggleMute} aria-label="mute">
+                {#if muted || volume === 0}
+                  <svg width="24" height="24" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M9 4L5 7H2V11H5L9 14V4Z" fill="currentColor"/>
+                    <line x1="12" y1="6" x2="16" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                    <line x1="16" y1="6" x2="12" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                  </svg>
+                {:else if volume < 0.5}
+                  <svg width="24" height="24" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M9 4L5 7H2V11H5L9 14V4Z" fill="currentColor"/>
+                    <path d="M11.5 7C12.5 7.8 13 8.4 13 9C13 9.6 12.5 10.2 11.5 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                  </svg>
+                {:else}
+                  <svg width="24" height="24" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M9 4L5 7H2V11H5L9 14V4Z" fill="currentColor"/>
+                    <path d="M11.5 7C12.5 7.8 13 8.4 13 9C13 9.6 12.5 10.2 11.5 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                    <path d="M13.5 5C15.5 6.5 16.5 7.7 16.5 9C16.5 10.3 15.5 11.5 13.5 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                  </svg>
+                {/if}
+              </button>
+              <!-- fs volume diamonds -->
+              {#if volumeHovered}
+                <div class="volume-diamonds" onmousedown={startVolumeDrag} role="presentation">
+                  {#each Array(VOLUME_SEGMENTS) as _, i}
+                    <button
+                      class="volume-diamond"
+                      class:filled={i < Math.round(volume * VOLUME_SEGMENTS)}
+                      style="--i: {i}"
+                      onclick={() => setVolume((i + 1) / VOLUME_SEGMENTS)}
+                      aria-label="set volume {Math.round((i + 1) / VOLUME_SEGMENTS * 100)}%">
+                    </button>
+                  {/each}
+                  <span class="volume-tooltip">{muted ? '0' : Math.round(volume * 100)}%</span>
+                </div>
+              {/if}
+            </div>
+            <!-- fs time -->
             <span class="fs-time">{currentTime} / {duration}</span>
+            <!-- fs exit fullscreen -->
             <div class="fs-right">
               <button class="fs-ctrl-btn" onclick={toggleFullscreen} aria-label="exit fullscreen">
                 <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -550,6 +612,8 @@
             </div>
           </div>
         </div>
+
+      <!-- fs image controls -->
       {:else}
         <div class="fs-controls image-only">
           <div class="fs-controls-row">
@@ -564,6 +628,7 @@
           </div>
         </div>
       {/if}
+
     </div>
   {/if}
 
@@ -633,19 +698,7 @@
     color: #aaaaaa;
   }
 
-  .topbar-sep {
-    width: 0.5px;
-    height: 14px;
-    background: #2a2a2a;
-    flex-shrink: 0;
-  }
-
-  .eject-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
+  /* window controls */
   .window-controls {
     margin-left: auto;
     display: flex;
@@ -745,6 +798,7 @@
     display: block;
   }
 
+  /* empty state */
   .empty {
     background: none;
     border: 1px dashed #222222;
@@ -797,6 +851,7 @@
     gap: 8px;
   }
 
+  /* zoom */
   .zoom {
     font-size: 12px;
     color: #444444;
@@ -811,6 +866,7 @@
     color: #888888;
   }
 
+  /* fullscreen button */
   .fs-btn {
     background: none;
     border: none;
@@ -828,7 +884,7 @@
     color: #888888;
   }
 
-  /* video */
+  /* video wrapper */
   .video-wrapper {
     position: relative;
     display: inline-flex;
@@ -853,8 +909,10 @@
     width: auto;
     height: auto;
     object-fit: contain;
+    cursor: pointer;
   }
 
+  /* video controls overlay */
   .video-controls {
     position: absolute;
     bottom: 0;
@@ -873,6 +931,7 @@
     opacity: 1;
   }
 
+  /* progress bar */
   .progress-bar {
     width: 100%;
     height: 8px;
@@ -892,6 +951,7 @@
     pointer-events: none;
   }
 
+  /* progress diamond */
   .progress-diamond {
     position: absolute;
     top: 50%;
@@ -908,6 +968,7 @@
     opacity: 1;
   }
 
+  /* controls row */
   .controls-row {
     display: flex;
     align-items: center;
@@ -937,12 +998,7 @@
     height: 28px;
   }
 
-  .volume-btn svg {
-    width: 28px;
-    height: 28px;
-  }
-
-  /* time */
+  /* time display */
   .time-display {
     font-size: 16px;
     color: #cccccc;
@@ -967,6 +1023,12 @@
     width: 32px;
   }
 
+  .volume-btn svg {
+    width: 28px;
+    height: 28px;
+  }
+
+  /* volume diamonds */
   .volume-diamonds {
     display: flex;
     align-items: center;
@@ -1038,6 +1100,7 @@
     object-fit: contain;
   }
 
+  /* fullscreen overlay */
   .fs-overlay {
     position: fixed;
     inset: 0;
@@ -1047,11 +1110,12 @@
     z-index: 100;
   }
 
-  main.fullscreen:hover .fs-overlay {
+  .fs-overlay.visible {
     opacity: 1;
     pointer-events: all;
   }
 
+  /* fs topbar */
   .fs-topbar {
     position: absolute;
     top: 0;
@@ -1102,6 +1166,7 @@
     color: #ff6666;
   }
 
+  /* fs controls */
   .fs-controls {
     position: absolute;
     bottom: 0;
@@ -1118,6 +1183,7 @@
     background: linear-gradient(transparent, rgba(0,0,0,0.6));
   }
 
+  /* fs progress bar */
   .fs-progress {
     width: 100%;
     height: 4px;
@@ -1135,6 +1201,7 @@
     pointer-events: none;
   }
 
+  /* fs progress diamond */
   .fs-progress-diamond {
     position: absolute;
     top: 50%;
@@ -1145,6 +1212,7 @@
     pointer-events: none;
   }
 
+  /* fs controls row */
   .fs-controls-row {
     display: flex;
     align-items: center;
@@ -1169,8 +1237,8 @@
   }
 
   .fs-ctrl-btn svg {
-    width: 26px;
-    height: 26px;
+    width: 20px;
+    height: 20px;
   }
 
   .fs-ctrl-btn.volume-btn svg {
@@ -1178,10 +1246,12 @@
     height: 32px;
   }
 
+  /* fs time */
   .fs-time {
     font-size: 14px;
     color: #888888;
     font-family: Inter, sans-serif;
+    margin-left: 8px;
   }
 
   .fs-right {
@@ -1191,6 +1261,7 @@
     gap: 8px;
   }
 
+  /* fs nav buttons */
   .fs-nav-left, .fs-nav-right {
     position: absolute;
     top: 50%;
