@@ -36,6 +36,8 @@
   let translateY = $state(0);
   let isDragging = $state(false);
   let dragStart = $state({ x: 0, y: 0, tx: 0, ty: 0 });
+  let lastClickTime = 0;
+  let pendingPlay: ReturnType<typeof setTimeout> | undefined;
 
   const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'];
   const videoExts = ['mp4', 'webm', 'mkv', 'avi', 'mov', 'wmv'];
@@ -347,7 +349,22 @@
 
     function onUp() {
       isDragging = false;
-      if (!hasMoved && isVideo) togglePlay();
+      if (!hasMoved) {
+        const now = Date.now();
+        const timeSinceLast = now - lastClickTime;
+        lastClickTime = now;
+
+        if (isVideo) {
+          if (timeSinceLast < 300) {
+            clearTimeout(pendingPlay);
+            toggleFullscreen();
+          } else {
+            pendingPlay = setTimeout(togglePlay, 150);
+          }
+        } else {
+          if (timeSinceLast < 300) toggleFullscreen();
+        }
+      }
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
     }
@@ -459,7 +476,6 @@
       onmouseleave={() => (hoverZone = 'none')}
       onwheel={handleViewerScroll}
       onmousedown={!isVideo ? startPan : undefined}
-      ondblclick={!isVideo && fileSrc ? toggleFullscreen : undefined}
       ontouchstart={(e) => {
         if (e.touches.length === 2) e.preventDefault();
       }}
@@ -655,9 +671,7 @@
       {/if}
     </span>
     <div class="bottombar-right">
-      <span class="zoom" onclick={resetZoom} role="button" tabindex="0"
-        >{Math.round(zoomLevel)}%</span
-      >
+      <button class="zoom" onclick={resetZoom}>{Math.round(zoomLevel)}%</button>
       <button class="fs-btn" onclick={toggleFullscreen} aria-label="toggle fullscreen">
         <svg
           width="12"
@@ -990,14 +1004,6 @@
     color: #ff6666;
   }
 
-  .wc-btn.maximize svg {
-    opacity: 0.75;
-  }
-
-  .wc-btn.maximize:hover svg {
-    opacity: 1;
-  }
-
   .content {
     flex: 1;
     display: flex;
@@ -1116,6 +1122,8 @@
     padding: 2px 4px;
     border-radius: 3px;
     transition: color 0.2s;
+    background: none;
+    border: none;
   }
 
   .zoom:hover {
