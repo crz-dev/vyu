@@ -13,6 +13,9 @@
   let fileSize = $state('');
   let fileDimensions = $state('');
   let fileInfoLoading = $state(false);
+  let isLoadingFile = $state(false);
+  let loadingFadingOut = $state(false);
+  let loadingTimer: ReturnType<typeof setTimeout> | undefined;
 
   let videoEl = $state<HTMLVideoElement | null>(null);
   let playing = $state(false);
@@ -162,6 +165,7 @@
   }
 
   async function displayFile(path: string) {
+    isLoadingFile = true;
     fileName = path.split('\\').pop() || path.split('/').pop() || path;
     const ext = path.split('.').pop()?.toLowerCase() || '';
     isVideo = videoExts.includes(ext);
@@ -181,6 +185,14 @@
     const img = e.target as HTMLImageElement;
     fileDimensions = `${img.naturalWidth} × ${img.naturalHeight}`;
     fileInfoLoading = false;
+    clearTimeout(loadingTimer);
+    loadingTimer = setTimeout(() => {
+      loadingFadingOut = true;
+      setTimeout(() => {
+        isLoadingFile = false;
+        loadingFadingOut = false;
+      }, 600);
+    }, 800);
   }
 
   function onVideoLoad() {
@@ -188,6 +200,10 @@
     fileDimensions = `${videoEl.videoWidth} × ${videoEl.videoHeight}`;
     videoEl.volume = volume;
     fileInfoLoading = false;
+    clearTimeout(loadingTimer);
+    loadingTimer = setTimeout(() => {
+      isLoadingFile = false;
+    }, 800);
     progress = 0;
     currentTime = '0:00';
     duration = formatTime(videoEl.duration);
@@ -195,6 +211,9 @@
   }
 
   async function loadFile(path: string) {
+    isLoadingFile = true;
+    loadingFadingOut = false;
+    clearTimeout(loadingTimer);
     await displayFile(path);
     const sep = path.includes('\\') ? '\\' : '/';
     const folder = path.substring(0, path.lastIndexOf(sep));
@@ -439,6 +458,7 @@
 
 <main
   class:fullscreen={isFullscreen}
+  class:loading={isLoadingFile}
   onmousemove={isFullscreen ? resetFsTimer : undefined}
   ondrop={(e) => e.preventDefault()}
   ondragover={(e) => e.preventDefault()}
@@ -904,6 +924,9 @@
         </div>
       {/if}
     </div>
+  {/if}
+  {#if isLoadingFile}
+    <div class="border-sweep" class:fading={loadingFadingOut}></div>
   {/if}
 </main>
 
@@ -1573,5 +1596,65 @@
   .fs-nav-btn:hover {
     color: #cccccc;
     background: rgba(0, 0, 0, 0.7);
+  }
+
+  :global(.border-sweep) {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 200;
+    overflow: hidden;
+    -webkit-mask:
+      linear-gradient(#fff 0 0) content-box,
+      linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask:
+      linear-gradient(#fff 0 0) content-box,
+      linear-gradient(#fff 0 0);
+    mask-composite: exclude;
+    padding: 3px;
+  }
+
+  :global(.border-sweep::before) {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 300%;
+    height: 300%;
+    translate: -50% -50%;
+    background: conic-gradient(
+      from 70deg,
+      transparent 60%,
+      rgba(255, 255, 255, 0.8) 80%,
+      white 85%,
+      rgba(255, 255, 255, 0.8) 90%,
+      transparent 100%
+    );
+    animation: borderSweep 1.2s linear infinite;
+  }
+
+  @keyframes borderSweep {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  :global(.border-sweep.fading::before) {
+    animation:
+      borderSweep 1.2s linear infinite,
+      sweepFade 0.6s ease-out forwards;
+  }
+
+  @keyframes sweepFade {
+    from {
+      opacity: 1;
+    }
+    to {
+      opacity: 0;
+    }
   }
 </style>
